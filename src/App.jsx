@@ -8,19 +8,19 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 const STORAGE_KEY = "orto-garden-v1";
 
 const FAMILY = {
-  nightshade: { label: "Nightshades", color: "#A32E27", note: "Solanaceae" },
-  brassica: { label: "Brassicas", color: "#43644F", note: "Cabbage family" },
-  legume: { label: "Legumes", color: "#7D9A5B", note: "Nitrogen fixers" },
-  allium: { label: "Alliums", color: "#7E6C9E", note: "Onion family" },
-  cucurbit: { label: "Cucurbits", color: "#C58A2E", note: "Squash family" },
-  umbellifer: { label: "Umbellifers", color: "#C0631A", note: "Carrot family" },
-  chenopod: { label: "Chenopods", color: "#8A3A5B", note: "Beet & chard" },
-  aster: { label: "Asters", color: "#6E8F4E", note: "Lettuce family" },
-  herb: { label: "Herbs", color: "#3F6F5C", note: "Mixed families" },
-  grass: { label: "Grasses", color: "#B0952F", note: "Corn" },
-  perennial: { label: "Perennials", color: "#54697A", note: "Stays put" },
-  flower: { label: "Flowers", color: "#C25B7C", note: "Cutting & pollinator" },
-  other: { label: "Custom", color: "#7A7A6A", note: "User-added" },
+  nightshade: { label: "Nightshades", color: "#D04235", note: "Solanaceae" },
+  brassica: { label: "Brassicas", color: "#268446", note: "Cabbage family" },
+  legume: { label: "Legumes", color: "#528031", note: "Nitrogen fixers" },
+  allium: { label: "Alliums", color: "#8B62B4", note: "Onion family" },
+  cucurbit: { label: "Cucurbits", color: "#AE6013", note: "Squash family" },
+  umbellifer: { label: "Umbellifers", color: "#C25120", note: "Carrot family" },
+  chenopod: { label: "Chenopods", color: "#C84370", note: "Beet & chard" },
+  aster: { label: "Asters", color: "#8B720B", note: "Lettuce family" },
+  herb: { label: "Herbs", color: "#2B8170", note: "Mixed families" },
+  grass: { label: "Grasses", color: "#827349", note: "Corn" },
+  perennial: { label: "Perennials", color: "#44799F", note: "Stays put" },
+  flower: { label: "Flowers", color: "#C639A2", note: "Cutting & pollinator" },
+  other: { label: "Custom", color: "#757568", note: "User-added" },
 };
 
 /* weeks are relative to last spring frost — negative = before */
@@ -4067,7 +4067,8 @@ function Styles() {
 .orto {
   --limewash:#F1F3EB; --paper:#FDFEFC; --ink:#1E241B; --ink-soft:#5A6455;
   --rule:#DEE3D5; --rule-soft:#EAEDE4;
-  --olive:#556B45; --pomodoro:#A32E27; --chicory:#3B5A73; --soil:#6B5344; --berry:#8A3A5B;
+  --olive:#2C843E; --pomodoro:#A32E27; --chicory:#3B5A73; --soil:#6B5344; --berry:#8A3A5B;
+  --headdark:#1B3729; --headlight:#2B5037; --gold:#CC9E11;
   background:var(--limewash); color:var(--ink);
   font-family:'Archivo', system-ui, sans-serif; font-size:14px; line-height:1.55;
 }
@@ -4080,23 +4081,24 @@ function Styles() {
 }
 
 /* masthead */
-.orto-head{border-bottom:1px solid var(--rule); background:var(--paper);}
+.orto-head{background:linear-gradient(120deg, var(--headdark) 0%, var(--headlight) 100%);}
 .orto-head-inner{max-width:1400px; margin:0 auto; padding:30px 24px 22px; display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end; justify-content:space-between;}
-.orto-title{font-family:'Alegreya',Georgia,serif; font-weight:800; font-size:34px; line-height:1; letter-spacing:-0.01em; margin:0;}
-.orto-sub{margin:4px 0 0; font-size:12.5px; color:var(--ink-soft); letter-spacing:0.03em; text-transform:uppercase;}
-.orto-head-meta{display:flex; align-items:center; gap:16px; font-size:12px; color:var(--ink-soft); flex-wrap:wrap;}
+.orto-title{font-family:'Alegreya',Georgia,serif; font-weight:800; font-size:34px; line-height:1; letter-spacing:-0.01em; margin:0; color:#FBFBF6;}
+.orto-sub{margin:4px 0 0; font-size:12.5px; color:rgba(255,255,255,.62); letter-spacing:0.03em; text-transform:uppercase;}
+.orto-head-meta{display:flex; align-items:center; gap:16px; font-size:12px; color:rgba(255,255,255,.72); flex-wrap:wrap;}
 .orto-year{display:flex; align-items:center; gap:7px; text-transform:uppercase; letter-spacing:0.06em;}
-.orto-year select{font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:var(--ink); background:transparent; border:1px solid var(--rule); border-radius:6px; padding:3px 6px;}
-.orto-stat i{font-style:normal; color:var(--ink-soft); opacity:.75;}
-.orto-save{min-width:70px; color:var(--olive);}
+.orto-year select{font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:#FBFBF6; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.28); border-radius:6px; padding:3px 6px;}
+.orto-stat i{font-style:normal; color:rgba(255,255,255,.6); opacity:.85;}
+.orto-save{min-width:70px; color:var(--gold);}
 .orto-undoredo{display:flex; gap:2px;}
-.orto-undoredo button{width:24px; height:24px; border:1px solid var(--rule); border-radius:6px; background:transparent; color:var(--ink-soft); font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;}
-.orto-undoredo button:hover:not(:disabled){border-color:var(--ink); color:var(--ink);}
+.orto-undoredo button{width:24px; height:24px; border:1px solid rgba(255,255,255,.28); border-radius:6px; background:transparent; color:rgba(255,255,255,.75); font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;}
+.orto-undoredo button:hover:not(:disabled){border-color:#fff; color:#fff;}
 .orto-undoredo button:disabled{opacity:.3; cursor:not-allowed;}
 
 .orto-tabs{max-width:1400px; margin:0 auto; padding:0 24px; display:flex; gap:6px;}
-.orto-tabs button{background:none; border:none; border-bottom:2px solid transparent; padding:12px 16px; font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-soft);}
-.orto-tabs button.on{color:var(--ink); border-bottom-color:var(--pomodoro);}
+.orto-tabs button{background:none; border:none; border-bottom:2px solid transparent; padding:12px 16px; font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,.68);}
+.orto-tabs button:hover{color:#fff;}
+.orto-tabs button.on{color:#fff; border-bottom-color:var(--gold);}
 
 .orto-main{max-width:1400px; margin:0 auto; padding:28px 24px 72px;}
 .orto-panel{background:var(--paper); border:1px solid var(--rule); border-radius:8px; padding:22px; box-shadow:0 1px 3px rgba(30,36,27,.04);}
@@ -4282,9 +4284,9 @@ function Styles() {
 .orto-infobtn{flex:none; width:20px; height:20px; border-radius:50%; border:1px solid var(--rule); background:transparent; color:var(--ink-soft); font-size:10.5px; font-style:italic; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center;}
 .orto-infobtn:hover, .orto-infobtn.on{border-color:var(--chicory); color:var(--chicory);}
 
-.orto-designbtn{display:flex; align-items:center; gap:6px; background:none; border:none; padding:0; margin-top:2px; font-family:'Archivo',sans-serif; font-size:13px; color:var(--ink-soft); cursor:pointer;}
-.orto-designbtn:hover{color:var(--ink);}
-.orto-designcount{color:var(--ink-soft); opacity:.7; font-size:10.5px;}
+.orto-designbtn{display:flex; align-items:center; gap:6px; background:none; border:none; padding:0; margin-top:2px; font-family:'Archivo',sans-serif; font-size:13px; color:rgba(255,255,255,.7); cursor:pointer;}
+.orto-designbtn:hover{color:#fff;}
+.orto-designcount{color:rgba(255,255,255,.55); opacity:.9; font-size:10.5px;}
 .orto-caret{font-size:9px;}
 .orto-designpop{position:absolute; z-index:30; margin-top:6px; background:var(--paper); border:1px solid var(--ink); border-radius:8px; padding:12px; width:300px; box-shadow:0 8px 24px rgba(30,36,27,.16);}
 .orto-designlist{list-style:none; margin:0 0 8px; padding:0; max-height:260px; overflow-y:auto;}
