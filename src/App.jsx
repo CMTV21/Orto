@@ -1424,7 +1424,14 @@ export default function GardenPlanner() {
       <header className="orto-head">
         <div className="orto-head-inner">
           <div>
-            <h1 className="orto-title">Orto</h1>
+            <h1 className="orto-title">
+              <svg className="orto-logo" viewBox="0 0 100 100" aria-hidden="true">
+                <path d="M50 84 L50 46" stroke="currentColor" strokeWidth="7" strokeLinecap="round" fill="none" />
+                <path d="M50 60 C 34 60, 26 48, 26 32 C 42 32, 50 44, 50 60 Z" fill="currentColor" />
+                <path d="M50 52 C 66 52, 74 40, 74 24 C 58 24, 50 36, 50 52 Z" fill="currentColor" />
+              </svg>
+              Orto
+            </h1>
             <button className="orto-designbtn" onClick={() => setShowDesigns((v) => !v)}>
               {designs.find((d) => d.id === currentDesignId)?.name || "My Garden"}
               <span className="mono orto-designcount">{designs.length > 1 ? `· ${designs.length} designs` : ""}</span>
@@ -4083,7 +4090,8 @@ function Styles() {
 /* masthead */
 .orto-head{background:linear-gradient(120deg, var(--headdark) 0%, var(--headlight) 100%);}
 .orto-head-inner{max-width:1400px; margin:0 auto; padding:30px 24px 22px; display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end; justify-content:space-between;}
-.orto-title{font-family:'Alegreya',Georgia,serif; font-weight:800; font-size:34px; line-height:1; letter-spacing:-0.01em; margin:0; color:#FBFBF6;}
+.orto-title{display:flex; align-items:center; gap:9px; font-family:'Alegreya',Georgia,serif; font-weight:800; font-size:34px; line-height:1; letter-spacing:-0.01em; margin:0; color:#FBFBF6;}
+.orto-logo{width:30px; height:30px; flex:none; color:var(--gold);}
 .orto-sub{margin:4px 0 0; font-size:12.5px; color:rgba(255,255,255,.62); letter-spacing:0.03em; text-transform:uppercase;}
 .orto-head-meta{display:flex; align-items:center; gap:16px; font-size:12px; color:rgba(255,255,255,.72); flex-wrap:wrap;}
 .orto-year{display:flex; align-items:center; gap:7px; text-transform:uppercase; letter-spacing:0.06em;}
