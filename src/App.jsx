@@ -4065,11 +4065,11 @@ function Styles() {
 @import url('https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,500;0,700;0,800;1,500&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 .orto {
-  --limewash:#E7EAE1; --paper:#F7F8F3; --ink:#1E241B; --ink-soft:#5A6455;
-  --rule:#CBD1C2; --rule-soft:#DDE1D6;
+  --limewash:#F1F3EB; --paper:#FDFEFC; --ink:#1E241B; --ink-soft:#5A6455;
+  --rule:#DEE3D5; --rule-soft:#EAEDE4;
   --olive:#556B45; --pomodoro:#A32E27; --chicory:#3B5A73; --soil:#6B5344; --berry:#8A3A5B;
   background:var(--limewash); color:var(--ink);
-  font-family:'Archivo', system-ui, sans-serif; font-size:14px; line-height:1.45;
+  font-family:'Archivo', system-ui, sans-serif; font-size:14px; line-height:1.55;
 }
 .orto *{box-sizing:border-box;}
 .orto .mono, .orto .svg-mono{font-family:'IBM Plex Mono', ui-monospace, monospace;}
@@ -4081,44 +4081,44 @@ function Styles() {
 
 /* masthead */
 .orto-head{border-bottom:1px solid var(--rule); background:var(--paper);}
-.orto-head-inner{max-width:1400px; margin:0 auto; padding:18px 20px 12px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; justify-content:space-between;}
+.orto-head-inner{max-width:1400px; margin:0 auto; padding:30px 24px 22px; display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end; justify-content:space-between;}
 .orto-title{font-family:'Alegreya',Georgia,serif; font-weight:800; font-size:34px; line-height:1; letter-spacing:-0.01em; margin:0;}
 .orto-sub{margin:4px 0 0; font-size:12.5px; color:var(--ink-soft); letter-spacing:0.03em; text-transform:uppercase;}
 .orto-head-meta{display:flex; align-items:center; gap:16px; font-size:12px; color:var(--ink-soft); flex-wrap:wrap;}
 .orto-year{display:flex; align-items:center; gap:7px; text-transform:uppercase; letter-spacing:0.06em;}
-.orto-year select{font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:var(--ink); background:transparent; border:1px solid var(--rule); border-radius:3px; padding:3px 6px;}
+.orto-year select{font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:var(--ink); background:transparent; border:1px solid var(--rule); border-radius:6px; padding:3px 6px;}
 .orto-stat i{font-style:normal; color:var(--ink-soft); opacity:.75;}
 .orto-save{min-width:70px; color:var(--olive);}
 .orto-undoredo{display:flex; gap:2px;}
-.orto-undoredo button{width:24px; height:24px; border:1px solid var(--rule); border-radius:3px; background:transparent; color:var(--ink-soft); font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;}
+.orto-undoredo button{width:24px; height:24px; border:1px solid var(--rule); border-radius:6px; background:transparent; color:var(--ink-soft); font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;}
 .orto-undoredo button:hover:not(:disabled){border-color:var(--ink); color:var(--ink);}
 .orto-undoredo button:disabled{opacity:.3; cursor:not-allowed;}
 
-.orto-tabs{max-width:1400px; margin:0 auto; padding:0 20px; display:flex; gap:2px;}
-.orto-tabs button{background:none; border:none; border-bottom:2px solid transparent; padding:8px 14px; font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-soft);}
+.orto-tabs{max-width:1400px; margin:0 auto; padding:0 24px; display:flex; gap:6px;}
+.orto-tabs button{background:none; border:none; border-bottom:2px solid transparent; padding:12px 16px; font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-soft);}
 .orto-tabs button.on{color:var(--ink); border-bottom-color:var(--pomodoro);}
 
-.orto-main{max-width:1400px; margin:0 auto; padding:18px 20px 60px;}
-.orto-panel{background:var(--paper); border:1px solid var(--rule); border-radius:4px; padding:16px;}
+.orto-main{max-width:1400px; margin:0 auto; padding:28px 24px 72px;}
+.orto-panel{background:var(--paper); border:1px solid var(--rule); border-radius:8px; padding:22px; box-shadow:0 1px 3px rgba(30,36,27,.04);}
 .orto-solo{max-width:1100px;}
 .orto-h2{font-family:'Alegreya',Georgia,serif; font-size:19px; font-weight:700; margin:0 0 4px;}
 .orto-h3{font-family:'Alegreya',Georgia,serif; font-size:15px; font-weight:700; margin:14px 0 6px;}
 .orto-fine{font-size:11.5px; color:var(--ink-soft); margin:4px 0 0;}
 .orto-empty{font-size:13px; color:var(--ink-soft); margin:8px 0 0; max-width:34ch;}
-.orto-input{width:100%; background:#fff; border:1px solid var(--rule); border-radius:3px; padding:6px 8px; font-family:inherit; font-size:13px; color:var(--ink);}
+.orto-input{width:100%; background:#fff; border:1px solid var(--rule); border-radius:6px; padding:6px 8px; font-family:inherit; font-size:13px; color:var(--ink);}
 
 /* yard */
-.orto-yard{display:grid; gap:14px; grid-template-columns:1fr;}
+.orto-yard{display:grid; gap:20px; grid-template-columns:1fr;}
 @media(min-width:1080px){ .orto-yard{grid-template-columns:minmax(0,1fr) 300px; align-items:start;} }
 .orto-yardscroll{overflow-x:auto; padding:2px 0;}
 .orto-yardside{max-height:82vh; overflow-y:auto;}
-.orto-inline{display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--ink-soft); border:1px solid var(--rule); border-radius:3px; padding:2px 7px;}
+.orto-inline{display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--ink-soft); border:1px solid var(--rule); border-radius:6px; padding:2px 7px;}
 .orto-inline input{width:52px; border:none; background:transparent; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--ink); text-align:right;}
 .orto-edgebar{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; padding:10px 0 12px; margin-bottom:8px; border-bottom:1px solid var(--rule-soft);}
 .orto-edgebar label{display:flex; flex-direction:column; gap:3px; font-size:10px; letter-spacing:0.07em; text-transform:uppercase; color:var(--ink-soft);}
-.orto-edgebar select{border:1px solid var(--rule); border-radius:3px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; background:#fff; color:var(--ink);}
+.orto-edgebar select{border:1px solid var(--rule); border-radius:6px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; background:#fff; color:var(--ink);}
 .orto-featadd{display:flex; flex-wrap:wrap; gap:5px; margin-left:auto;}
-.orto-featadd button{background:transparent; border:1px dashed var(--rule); border-radius:3px; padding:3px 8px; font-size:11px; color:var(--ink-soft);}
+.orto-featadd button{background:transparent; border:1px dashed var(--rule); border-radius:6px; padding:3px 8px; font-size:11px; color:var(--ink-soft);}
 .orto-featadd button:hover{border-style:solid; color:var(--ink);}
 .orto-clearlist{list-style:none; margin:6px 0 0; padding:0;}
 .orto-clearlist li{display:flex; align-items:baseline; gap:8px; font-size:12.5px; padding:4px 0; border-bottom:1px solid var(--rule-soft);}
@@ -4140,12 +4140,12 @@ function Styles() {
 .orto-stocktable td.orto-fine{font-weight:400;}
 
 .orto-addbar{display:flex; flex-wrap:wrap; gap:5px; margin:10px 0 0;}
-.orto-addbar button{background:transparent; border:1px solid var(--rule); border-radius:3px; padding:4px 11px; font-size:11.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace;}
+.orto-addbar button{background:transparent; border:1px solid var(--rule); border-radius:6px; padding:4px 11px; font-size:11.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace;}
 .orto-addbar button.on{background:var(--ink); color:var(--paper); border-color:var(--ink);}
 .orto-addbar button.berry{color:var(--berry); border-color:#D9BECB;}
 .orto-addbar button.on.berry{background:var(--berry); color:var(--paper); border-color:var(--berry);}
 .orto-palettedrawer{display:flex; flex-wrap:wrap; gap:4px; padding:11px 0 4px; margin-top:8px; border-top:1px solid var(--rule-soft);}
-.orto-palettedrawer button{display:flex; align-items:center; gap:6px; background:var(--limewash); border:1px solid var(--rule); border-radius:3px; padding:4px 9px; font-size:12px; color:var(--ink);}
+.orto-palettedrawer button{display:flex; align-items:center; gap:6px; background:var(--limewash); border:1px solid var(--rule); border-radius:6px; padding:4px 9px; font-size:12px; color:var(--ink);}
 .orto-palettedrawer button:hover{border-color:var(--ink);}
 .orto-palettedrawer button i{font-style:normal; font-size:9.5px; color:var(--ink-soft);}
 .orto-fruitgroup{width:100%; margin-bottom:6px;}
@@ -4156,12 +4156,12 @@ function Styles() {
 .orto-plantpanel label{display:block; font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-soft);}
 
 .orto-tapebar{display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:9px 11px; margin:10px 0 0;
-  background:rgba(163,46,39,.06); border:1px solid #E0BEBB; border-radius:3px;}
+  background:rgba(163,46,39,.06); border:1px solid #E0BEBB; border-radius:6px;}
 .orto-tapehint{font-size:12.5px; color:var(--ink);}
 .orto-tapemetric{font-size:11.5px; color:var(--ink-soft);}
 .orto-tapebar .orto-bedtools{margin-left:auto;}
 .orto-measlist{list-style:none; margin:6px 0 0; padding:0;}
-.orto-measlist li{display:flex; align-items:center; gap:8px; padding:4px 6px; margin:0 -6px; border-bottom:1px solid var(--rule-soft); border-radius:3px; cursor:pointer;}
+.orto-measlist li{display:flex; align-items:center; gap:8px; padding:4px 6px; margin:0 -6px; border-bottom:1px solid var(--rule-soft); border-radius:6px; cursor:pointer;}
 .orto-measlist li:hover{background:var(--limewash);}
 .orto-measlist li.sel{background:rgba(59,90,115,.1);}
 .orto-measlist li span{width:66px; flex:none; font-size:11.5px; color:var(--chicory);}
@@ -4169,7 +4169,7 @@ function Styles() {
 .orto-measlist li button{flex:none; font-size:10.5px;}
 
 .orto-nudge{display:grid; grid-template-columns:repeat(3,28px); grid-template-rows:repeat(2,26px); gap:3px; margin:8px 0; justify-content:start;}
-.orto-nudge button{font-size:9px; padding:0; border:1px solid var(--rule); background:transparent; border-radius:3px; color:var(--ink-soft);}
+.orto-nudge button{font-size:9px; padding:0; border:1px solid var(--rule); background:transparent; border-radius:6px; color:var(--ink-soft);}
 .orto-nudge button:nth-child(1){grid-column:2;}
 .orto-nudge button:nth-child(2){grid-column:1; grid-row:2;}
 .orto-nudge button:nth-child(3){grid-column:3; grid-row:2;}
@@ -4177,24 +4177,24 @@ function Styles() {
 .orto-nudge button:hover{border-color:var(--ink); color:var(--ink);}
 
 /* seeds */
-.orto-seeds{display:grid; gap:14px; grid-template-columns:1fr;}
+.orto-seeds{display:grid; gap:20px; grid-template-columns:1fr;}
 @media(min-width:1080px){ .orto-seeds{grid-template-columns:minmax(0,1fr) 300px; align-items:start;} }
 .orto-h4{font-family:'Alegreya',Georgia,serif; font-size:13.5px; font-weight:700; margin:0;}
 .orto-seedfilters{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0 12px;}
 .orto-seedfilters .orto-input{flex:1; min-width:180px;}
-.orto-segmented{display:flex; border:1px solid var(--rule); border-radius:3px; overflow:hidden;}
+.orto-segmented{display:flex; border:1px solid var(--rule); border-radius:6px; overflow:hidden;}
 .orto-segmented button{background:transparent; border:none; padding:5px 11px; font-size:11px; color:var(--ink-soft); border-right:1px solid var(--rule);}
 .orto-segmented button:last-child{border-right:none;}
 .orto-segmented button.on{background:var(--ink); color:var(--paper);}
-.orto-seedform{border:1px solid var(--rule); border-radius:3px; padding:12px; margin:8px 0 4px; background:var(--limewash);}
+.orto-seedform{border:1px solid var(--rule); border-radius:6px; padding:12px; margin:8px 0 4px; background:var(--limewash);}
 .orto-seedform .orto-formrow{display:grid; gap:8px; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); margin-bottom:10px;}
 .orto-seedform label, .orto-seeddetail label{display:block; font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-soft);}
 .orto-seedform select{height:31px;}
 .orto-fullpick{display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px;}
-.orto-fullpick button{background:transparent; border:1px solid var(--rule); border-radius:3px; padding:4px 10px; font-size:11px; color:var(--ink-soft);}
+.orto-fullpick button{background:transparent; border:1px solid var(--rule); border-radius:6px; padding:4px 10px; font-size:11px; color:var(--ink-soft);}
 .orto-fullpick button.on{background:var(--soil); border-color:var(--soil); color:var(--paper);}
 .orto-seedlist{display:flex; flex-direction:column; gap:5px;}
-.orto-seedcard{border:1px solid var(--rule); border-radius:3px; background:#fff; overflow:hidden;}
+.orto-seedcard{border:1px solid var(--rule); border-radius:6px; background:#fff; overflow:hidden;}
 .orto-seedcard.spent{border-left:3px solid var(--pomodoro);}
 .orto-seedcard.test{border-left:3px solid #C58A2E;}
 .orto-seedcard.undated{border-left:3px solid var(--rule);}
@@ -4221,24 +4221,24 @@ function Styles() {
 .orto-linkbtn{margin-left:auto; background:none; border:none; font-size:11px; color:var(--chicory); text-decoration:underline; padding:0;}
 .orto-germform{display:flex; gap:10px; align-items:flex-end; margin-top:8px; flex-wrap:wrap;}
 .orto-germform label{display:flex; flex-direction:column; gap:3px; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-soft);}
-.orto-germform input{width:70px; border:1px solid var(--rule); border-radius:3px; padding:4px 6px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; background:#fff; color:var(--ink);}
-.orto-germform button{border:1px solid var(--rule); background:transparent; border-radius:3px; padding:5px 12px; font-size:11px; color:var(--ink-soft);}
+.orto-germform input{width:70px; border:1px solid var(--rule); border-radius:6px; padding:4px 6px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; background:#fff; color:var(--ink);}
+.orto-germform button{border:1px solid var(--rule); background:transparent; border-radius:6px; padding:5px 12px; font-size:11px; color:var(--ink-soft);}
 .orto-germform button:disabled{opacity:.4; cursor:not-allowed;}
 .orto-seedside{max-height:82vh; overflow-y:auto;}
 .orto-orderrow{padding:8px 0; border-bottom:1px solid var(--rule-soft);}
 .orto-pillwrap{display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;}
 
 /* build */
-.orto-build{display:grid; gap:14px; grid-template-columns:1fr;}
+.orto-build{display:grid; gap:20px; grid-template-columns:1fr;}
 @media(min-width:1080px){ .orto-build{grid-template-columns:minmax(0,1fr) 300px; align-items:start;} }
 .orto-buildopts{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin:10px 0 12px; padding-bottom:12px; border-bottom:1px solid var(--rule-soft);}
 .orto-buildopts label{display:flex; flex-direction:column; gap:3px; font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-soft);}
 .orto-buildopts .orto-input{min-width:130px;}
 .orto-toggles{display:flex; gap:5px; margin-left:auto;}
-.orto-toggles button{background:transparent; border:1px solid var(--rule); border-radius:3px; padding:6px 11px; font-size:11px; color:var(--ink-soft);}
+.orto-toggles button{background:transparent; border:1px solid var(--rule); border-radius:6px; padding:6px 11px; font-size:11px; color:var(--ink-soft);}
 .orto-toggles button.on{background:var(--soil); border-color:var(--soil); color:var(--paper);}
 .orto-cutlist{display:flex; flex-direction:column; gap:4px; margin-top:8px;}
-.orto-cutbed{border:1px solid var(--rule); border-radius:3px; background:#fff; overflow:hidden;}
+.orto-cutbed{border:1px solid var(--rule); border-radius:6px; background:#fff; overflow:hidden;}
 .orto-cuthead{display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:none; border:none; padding:8px 11px; font-size:13px; color:var(--ink);}
 .orto-cuthead:hover{background:var(--limewash);}
 .orto-cuthead strong{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -4268,7 +4268,7 @@ function Styles() {
 .orto-worklist li{padding:3px 0;}
 
 /* plant info card */
-.orto-plantcard{border:1px solid var(--rule); border-radius:3px; background:#fff; padding:10px; margin:6px 0 10px;}
+.orto-plantcard{border:1px solid var(--rule); border-radius:6px; background:#fff; padding:10px; margin:6px 0 10px;}
 .orto-plantgrid{display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; margin-bottom:8px;}
 .orto-plantlabel{font-size:9.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-soft); display:block;}
 .orto-plantgrid p{font-size:12px; margin:1px 0 0; color:var(--ink);}
@@ -4286,10 +4286,10 @@ function Styles() {
 .orto-designbtn:hover{color:var(--ink);}
 .orto-designcount{color:var(--ink-soft); opacity:.7; font-size:10.5px;}
 .orto-caret{font-size:9px;}
-.orto-designpop{position:absolute; z-index:30; margin-top:6px; background:var(--paper); border:1px solid var(--ink); border-radius:4px; padding:12px; width:300px; box-shadow:0 8px 24px rgba(30,36,27,.16);}
+.orto-designpop{position:absolute; z-index:30; margin-top:6px; background:var(--paper); border:1px solid var(--ink); border-radius:8px; padding:12px; width:300px; box-shadow:0 8px 24px rgba(30,36,27,.16);}
 .orto-designlist{list-style:none; margin:0 0 8px; padding:0; max-height:260px; overflow-y:auto;}
 .orto-designlist li{display:flex; align-items:center; gap:6px; padding:5px 0; border-bottom:1px solid var(--rule-soft);}
-.orto-designlist li.cur{background:rgba(85,107,69,.07); margin:0 -6px; padding:5px 6px; border-radius:3px; border-bottom-color:transparent;}
+.orto-designlist li.cur{background:rgba(85,107,69,.07); margin:0 -6px; padding:5px 6px; border-radius:6px; border-bottom-color:transparent;}
 .orto-designopen{flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:1px; background:none; border:none; text-align:left; padding:0; cursor:pointer;}
 .orto-designopen span{font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;}
 .orto-designopen i{font-style:normal; font-size:10px; color:var(--ink-soft);}
@@ -4301,11 +4301,11 @@ function Styles() {
 .orto-lookuphead{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
 .orto-lookupresult{margin-top:8px;}
 .orto-lookupimages{display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;}
-.orto-lookupimages img{width:88px; height:88px; object-fit:cover; border-radius:3px; border:1px solid var(--rule); background:var(--limewash);}
+.orto-lookupimages img{width:88px; height:88px; object-fit:cover; border-radius:6px; border:1px solid var(--rule); background:var(--limewash);}
 .orto-lookupsources a{color:var(--chicory);}
 
 .orto-confirmpair{display:inline-flex; gap:5px;}
-.orto-confirmpair button{font-size:11px; padding:4px 9px; border-radius:3px; border:1px solid var(--rule);}
+.orto-confirmpair button{font-size:11px; padding:4px 9px; border-radius:6px; border:1px solid var(--rule);}
 .orto-confirmpair button.danger{background:var(--pomodoro); color:#fff; border-color:var(--pomodoro);}
 
 .orto-cropform{margin-top:10px;}
@@ -4316,7 +4316,7 @@ function Styles() {
 .orto-checkline input{width:auto;}
 
 /* plot layout */
-.orto-plot{display:grid; gap:14px; grid-template-columns:1fr;}
+.orto-plot{display:grid; gap:20px; grid-template-columns:1fr;}
 @media(min-width:1080px){ .orto-plot{grid-template-columns:222px minmax(0,1fr) 290px; align-items:start;} }
 
 /* palette */
@@ -4324,27 +4324,27 @@ function Styles() {
 .orto-palette-scroll{overflow-y:auto; padding-right:2px; flex:1; min-height:180px;}
 .orto-famgroup{margin-bottom:10px;}
 .orto-famlabel{font-size:10px; letter-spacing:0.1em; text-transform:uppercase; margin:0 0 4px; font-weight:600;}
-.orto-chip{display:flex; align-items:center; gap:7px; width:100%; text-align:left; background:transparent; border:1px solid transparent; border-radius:3px; padding:3px 5px; font-size:12.5px; color:var(--ink);}
+.orto-chip{display:flex; align-items:center; gap:7px; width:100%; text-align:left; background:transparent; border:1px solid transparent; border-radius:6px; padding:3px 5px; font-size:12.5px; color:var(--ink);}
 .orto-chip:hover{background:var(--limewash);}
 .orto-chip.on{background:var(--limewash); border-style:solid;}
 .orto-chip-name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .orto-chip-n{font-size:10px; color:var(--ink-soft);}
 .orto-swatch{width:10px; height:10px; border-radius:2px; flex:none; display:inline-block;}
 .orto-swatch.sm{width:7px; height:7px;}
-.orto-erase{background:transparent; border:1px dashed var(--rule); border-radius:3px; padding:5px; font-size:12px; color:var(--ink-soft);}
+.orto-erase{background:transparent; border:1px dashed var(--rule); border-radius:6px; padding:5px; font-size:12px; color:var(--ink-soft);}
 .orto-erase.on{border-color:var(--pomodoro); color:var(--pomodoro); border-style:solid;}
 
 /* bed bar */
 .orto-canvas{display:flex; flex-direction:column; gap:10px; min-width:0;}
 .orto-bedbar{display:flex; flex-wrap:wrap; gap:5px;}
-.orto-bedchip{background:var(--paper); border:1px solid var(--rule); border-radius:3px; padding:5px 9px; font-size:12.5px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
+.orto-bedchip{background:var(--paper); border:1px solid var(--rule); border-radius:6px; padding:5px 9px; font-size:12.5px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
 .orto-bedchip i{font-style:normal; font-size:10px; opacity:.65; font-family:'IBM Plex Mono',monospace;}
 .orto-bedchip.on{background:var(--ink); color:var(--paper); border-color:var(--ink);}
 .orto-bedchip.orto-add{border-style:dashed;}
 
 .orto-bedhead{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:12px;}
 .orto-bedtools{display:flex; gap:6px; flex-wrap:wrap;}
-.orto-bedtools button{background:transparent; border:1px solid var(--rule); border-radius:3px; padding:4px 9px; font-size:11px; letter-spacing:0.04em; color:var(--ink-soft);}
+.orto-bedtools button{background:transparent; border:1px solid var(--rule); border-radius:6px; padding:4px 9px; font-size:11px; letter-spacing:0.04em; color:var(--ink-soft);}
 .orto-bedtools button:hover:not(:disabled){border-color:var(--ink); color:var(--ink);}
 .orto-bedtools button:disabled{opacity:.4; cursor:not-allowed;}
 .orto-bedtools button.danger{color:var(--pomodoro); border-color:#E0BEBB;}
@@ -4356,7 +4356,7 @@ function Styles() {
     repeating-linear-gradient(0deg, var(--rule-soft) 0 1px, transparent 1px 12px),
     repeating-linear-gradient(90deg, var(--rule-soft) 0 1px, transparent 1px 12px),
     #FDFDFA;
-  padding:6px; border:1px solid var(--rule); border-radius:3px;}
+  padding:6px; border:1px solid var(--rule); border-radius:6px;}
 .orto-cell{aspect-ratio:1; border:1px solid var(--rule); border-radius:2px; background:rgba(255,255,255,.72);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; padding:2px; overflow:hidden; transition:transform .08s ease;}
 .orto-cell:hover{transform:scale(1.04); z-index:2;}
@@ -4378,18 +4378,18 @@ function Styles() {
 /* bed form */
 .orto-bedform .orto-formrow{display:grid; gap:8px; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); margin:8px 0 10px;}
 .orto-bedform label, .orto-editpop label{display:block; font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-soft);}
-.orto-editpop{position:absolute; right:16px; z-index:20; background:var(--paper); border:1px solid var(--ink); border-radius:4px; padding:12px; width:220px; display:flex; flex-direction:column; gap:7px; box-shadow:0 6px 20px rgba(30,36,27,.14);}
+.orto-editpop{position:absolute; right:16px; z-index:20; background:var(--paper); border:1px solid var(--ink); border-radius:8px; padding:12px; width:220px; display:flex; flex-direction:column; gap:7px; box-shadow:0 6px 20px rgba(30,36,27,.14);}
 
 /* season */
 .orto-season{display:flex; flex-direction:column; gap:14px;}
 .orto-frostbar{display:flex; flex-wrap:wrap; align-items:center; gap:16px; margin-bottom:12px;}
 .orto-frostbar label{display:flex; flex-direction:column; gap:3px; font-size:10px; letter-spacing:0.07em; text-transform:uppercase; color:var(--ink-soft);}
-.orto-frostbar input{border:1px solid var(--rule); border-radius:3px; padding:4px 6px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; background:#fff; color:var(--ink);}
+.orto-frostbar input{border:1px solid var(--rule); border-radius:6px; padding:4px 6px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; background:#fff; color:var(--ink);}
 .orto-frostdays{margin-left:auto; font-size:12px; color:var(--olive);}
-.orto-calbtn{border:1px solid var(--olive); border-radius:3px; padding:4px 10px; font-size:11px; color:var(--olive); background:transparent;}
+.orto-calbtn{border:1px solid var(--olive); border-radius:6px; padding:4px 10px; font-size:11px; color:var(--olive); background:transparent;}
 .orto-calbtn:hover:not(:disabled){background:var(--olive); color:var(--paper);}
 .orto-calbtn:disabled{opacity:.4; cursor:not-allowed;}
-.orto-caladd{margin-left:auto; flex:none; background:transparent; border:1px solid var(--rule); border-radius:3px; padding:1px 6px; font-size:9.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; opacity:0;}
+.orto-caladd{margin-left:auto; flex:none; background:transparent; border:1px solid var(--rule); border-radius:6px; padding:1px 6px; font-size:9.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; opacity:0;}
 .orto-task:hover .orto-caladd{opacity:1;}
 .orto-caladd:hover{border-color:var(--olive); color:var(--olive);}
 .orto-ribbonscroll{overflow-x:auto; padding:6px 0 2px;}
@@ -4428,7 +4428,7 @@ function Styles() {
 
 /* summary / print */
 .orto-summary-toolbar{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;}
-.orto-printsheet{background:#fff; border:1px solid var(--rule); border-radius:4px; padding:28px; max-width:800px; margin:0 auto;}
+.orto-printsheet{background:#fff; border:1px solid var(--rule); border-radius:8px; padding:28px; max-width:800px; margin:0 auto;}
 .orto-printhead{border-bottom:2px solid var(--ink); padding-bottom:10px; margin-bottom:18px;}
 .orto-printhead h1{font-family:'Alegreya',Georgia,serif; font-size:24px; font-weight:800; margin:0 0 4px;}
 .orto-printhead p{font-size:12px; color:var(--ink-soft); margin:0;}
