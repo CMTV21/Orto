@@ -848,9 +848,9 @@ async function loadLegacy() {
 
 const blankCells = (w, l) => Array(w * l).fill(null);
 
-/* A genuinely empty canvas — for "start from scratch," as opposed to
-   makeInitialState() below, which seeds a first-time design with a
-   working example layout so new users have something to look at. */
+/* A genuinely empty canvas. Every fresh install — first-time visitor,
+   no saved design to load — boots into this rather than any specific
+   real layout, so nobody else's garden shows up as someone else's default. */
 function makeBlankState() {
   return {
     beds: [],
@@ -862,25 +862,6 @@ function makeBlankState() {
     seeds: [],
     customCrops: [],
     taskDone: {},
-    build: { board: "2x6", material: "cedar", posts: true, fabric: true, ppf: MATERIALS.cedar.ppf },
-    frost: {},
-  };
-}
-
-function makeInitialState() {
-  const year = new Date().getFullYear();
-  const plan = {};
-  DEFAULT_BEDS.forEach((b) => {
-    plan[b.id] = blankCells(b.w, b.l);
-  });
-  return {
-    beds: DEFAULT_BEDS.map((b) => ({ ...b })),
-    features: DEFAULT_FEATURES.map((f) => ({ ...f })),
-    plantings: [],
-    measures: [],
-    yard: { ...DEFAULT_YARD, edges: { ...DEFAULT_YARD.edges } },
-    plans: { [year]: plan },
-    seeds: [],
     build: { board: "2x6", material: "cedar", posts: true, fabric: true, ppf: MATERIALS.cedar.ppf },
     frost: {},
   };
@@ -992,7 +973,7 @@ export default function GardenPlanner() {
         const legacy = await loadLegacy();
         const id = newDesignId();
         const now = Date.now();
-        const data = legacy && legacy.beds ? migrate(legacy) : makeInitialState();
+        const data = legacy && legacy.beds ? migrate(legacy) : makeBlankState();
         await saveDesignData(id, data);
         index = [{ id, name: legacy ? "My Garden" : "My Garden", updatedAt: now, createdAt: now }];
         await saveIndex(index);
@@ -1009,7 +990,7 @@ export default function GardenPlanner() {
 
       setDesigns(index);
       setCurrentDesignId(curId);
-      const loaded = data ? migrate(data) : makeInitialState();
+      const loaded = data ? migrate(data) : makeBlankState();
       (loaded.customCrops || []).forEach(registerCustomCrop);
       setState(loaded);
       setStatus("");
@@ -1158,7 +1139,7 @@ export default function GardenPlanner() {
     setStatus("Opening…");
     const data = await loadDesignData(id);
     setCurrentDesignId(id);
-    const loaded = data ? migrate(data) : makeInitialState();
+    const loaded = data ? migrate(data) : makeBlankState();
     (loaded.customCrops || []).forEach(registerCustomCrop);
     setStateRaw(loaded);
     setUndoStack([]); setRedoStack([]);      // undo history doesn't cross designs
@@ -1170,7 +1151,7 @@ export default function GardenPlanner() {
   const createDesign = async (name, blank) => {
     const id = newDesignId();
     const now = Date.now();
-    const data = blank ? makeBlankState() : (state ? JSON.parse(JSON.stringify(state)) : makeInitialState());
+    const data = blank || !state ? makeBlankState() : JSON.parse(JSON.stringify(state));
     await saveDesignData(id, data);
     const entry = { id, name: name.trim() || "New design", updatedAt: now, createdAt: now };
     const next = [...designs, entry];
