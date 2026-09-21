@@ -358,6 +358,7 @@ const FEATURE_KINDS = {
   play:       { label: "Play structure", fill: "#8FA372", shape: "rect", cat: "working", w: 10, d: 8, clear: 6, height: 7 },
   clothesline:{ label: "Clothesline", fill: "#9AA08F", shape: "rect", cat: "working", w: 20, d: 1, height: 6 },
   path:       { label: "Path", fill: "#B4AFA0", shape: "rect", cat: "working", w: 12, d: 2.5, height: 0 },
+  fence:      { label: "Fence", fill: "#7A6A57", shape: "line", cat: "working", w: 10, d: 0.5, height: 4, note: "An interior run — for splitting off a zone inside the yard, not the outer boundary (set that under Boundaries)." },
   lawn:       { label: "Lawn / open", fill: "#8FA372", shape: "rect", cat: "working", w: 12, d: 10, height: 0 },
   tree:       { label: "Tree (ornamental)", fill: "#7D9A5B", shape: "circle", cat: "working", w: 12, d: 12, height: 15, note: "Draw the mature canopy, not the trunk. Shade and root competition both reach about that far." },
 };
@@ -1261,13 +1262,15 @@ export default function GardenPlanner() {
   const setYard = (patch) => setState((s) => ({ ...s, yard: { ...s.yard, ...patch } }));
   const setEdge = (side, kind) => setState((s) => ({ ...s, yard: { ...s.yard, edges: { ...s.yard.edges, [side]: kind } } }));
   const moveFeature = (id, x, y) => setState((s) => ({ ...s, features: s.features.map((f) => (f.id === id ? { ...f, x, y } : f)) }));
-  const addFeature = (kind) => setState((s) => {
+  const addFeature = (kind, opts = {}) => setState((s) => {
     const k = FEATURE_KINDS[kind];
     return {
       ...s,
       features: [...s.features, {
         id: "f" + Math.random().toString(36).slice(2, 8),
-        kind, name: k.label, x: 1, y: 1, w: k.w ?? 6, d: k.d ?? 4,
+        kind, name: k.label,
+        x: opts.x ?? 1, y: opts.y ?? 1,
+        w: opts.w ?? k.w ?? 6, d: opts.d ?? k.d ?? 4,
       }],
     };
   });
@@ -1928,6 +1931,9 @@ function YardTab({
   const clipboard = useRef(null);
   const [showEdges, setShowEdges] = useState(false);
   const [palette, setPalette] = useState(null);
+  const [placingKind, setPlacingKind] = useState(null); // feature kind queued for click/drag placement
+  const [placePreview, setPlacePreview] = useState(null); // {x,y,w,d} ghost rect while placing, for rendering
+  const placing = useRef(null); // {kind, anchor, point} — authoritative drag data, read on pointerup
   const [tool, setTool] = useState("select");
   const [tape, setTape] = useState([]);          // committed points, in feet
   const [ghost, setGhost] = useState(null);      // live cursor point
@@ -1972,6 +1978,16 @@ function YardTab({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [tool, tape]);
+
+  /* Escape backs out of a pending feature placement. */
+  useEffect(() => {
+    if (!placingKind) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") { setPlacingKind(null); placing.current = null; setPlacePreview(null); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [placingKind]);
 
   /* Delete removes whatever is selected. Cmd/Ctrl+C copies it, Cmd/Ctrl+V pastes a copy nearby.
      Ignored while typing in a field, so labels and notes stay editable as normal. */
@@ -2050,6 +2066,13 @@ function YardTab({
 
   /* Clicking empty canvas: hit-test the kept measurements before falling through to deselect. */
   const onCanvasDown = (e) => {
+    if (placingKind) {
+      e.preventDefault();
+      const pt = snap(pointerToFt(e));
+      placing.current = { kind: placingKind, anchor: pt, point: pt };
+      setPlacePreview({ x: pt.x, y: pt.y, w: 0, d: 0 });
+      return;
+    }
     if (tool === "measure") {
       const pt = snap(pointerToFt(e));
       setTape((t) => [...t, pt]);
@@ -2070,6 +2093,16 @@ function YardTab({
   };
 
   const onMove = (e) => {
+    if (placing.current) {
+      const pt = snap(pointerToFt(e));
+      placing.current.point = pt;
+      const { anchor } = placing.current;
+      setPlacePreview({
+        x: Math.min(anchor.x, pt.x), y: Math.min(anchor.y, pt.y),
+        w: Math.abs(pt.x - anchor.x), d: Math.abs(pt.y - anchor.y),
+      });
+      return;
+    }
     if (tool === "measure") {
       const raw = pointerToFt(e);
       setGhost(tape.length ? snap(raw) : null);
@@ -2109,10 +2142,31 @@ function YardTab({
   };
 
   useEffect(() => {
-    const up = () => { drag.current = null; };
+    const up = () => {
+      drag.current = null;
+      const info = placing.current;
+      if (!info) return;
+      placing.current = null;
+      setPlacingKind(null);
+      setPlacePreview(null);
+      const k = FEATURE_KINDS[info.kind];
+      const dw = Math.abs(info.point.x - info.anchor.x);
+      const dd = Math.abs(info.point.y - info.anchor.y);
+      let x, y, w, d;
+      if (dw < 1 && dd < 1) {
+        // barely dragged — treat it as a click and drop the default size, centered here
+        w = k.w ?? 6; d = k.d ?? 4;
+        x = info.anchor.x - w / 2; y = info.anchor.y - d / 2;
+      } else {
+        x = Math.min(info.anchor.x, info.point.x);
+        y = Math.min(info.anchor.y, info.point.y);
+        w = Math.max(0.5, dw); d = Math.max(0.5, dd);
+      }
+      addFeature(info.kind, { x: Math.max(0, x), y: Math.max(0, y), w, d });
+    };
     window.addEventListener("pointerup", up);
     return () => window.removeEventListener("pointerup", up);
-  }, []);
+  }, [addFeature]);
 
   const sel = beds.find((b) => b.id === activeBed);
   const rects = beds.map((b) => ({ id: b.id, name: b.name, ...bedFootprint(b), x: b.x, y: b.y }));
@@ -2198,7 +2252,7 @@ function YardTab({
             <label className="orto-inline">D<input type="number" min="6" max="120" step="0.5" value={yard.d} onChange={(e) => setYard({ d: Number(e.target.value) || yard.d })} /></label>
             <label className="orto-inline" title="Degrees clockwise from up on the plan to true north">N<input type="number" min="0" max="359" step="5" value={Math.round(yard.northAngle || 0)} onChange={(e) => setYard({ northAngle: ((Number(e.target.value) % 360) + 360) % 360 })} />°</label>
             <button className={tool === "measure" ? "on" : ""}
-              onClick={() => { setTool(tool === "measure" ? "select" : "measure"); setTape([]); setGhost(null); }}>
+              onClick={() => { setTool(tool === "measure" ? "select" : "measure"); setTape([]); setGhost(null); setPlacingKind(null); }}>
               {tool === "measure" ? "Done measuring" : "Measure"}
             </button>
             <button onClick={() => setShowEdges((v) => !v)}>Boundaries</button>
@@ -2222,6 +2276,17 @@ function YardTab({
           </div>
         )}
 
+        {placingKind && (
+          <div className="orto-tapebar">
+            <span className="orto-tapehint">
+              Placing {FEATURE_KINDS[placingKind].label} — click to drop it at the default size, or click and drag to size it yourself.
+            </span>
+            <div className="orto-bedtools mono">
+              <button onClick={() => setPlacingKind(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
+
         <div className="orto-addbar">
           {Object.entries(FEATURE_CATS).map(([cat, label]) => (
             <button key={cat} className={palette === cat ? "on" : ""} onClick={() => setPalette(palette === cat ? null : cat)}>{label}</button>
@@ -2232,7 +2297,7 @@ function YardTab({
         {palette && palette !== "fruit" && (
           <div className="orto-palettedrawer">
             {Object.entries(FEATURE_KINDS).filter(([, v]) => v.cat === palette).map(([k, v]) => (
-              <button key={k} onClick={() => { addFeature(k); setPalette(null); }}>
+              <button key={k} onClick={() => { setPlacingKind(k); setPalette(null); setTool("select"); setTape([]); setGhost(null); }}>
                 <span className="orto-swatch" style={{ background: v.fill }} />
                 {v.label}
                 <i className="mono">{v.w}×{v.d}</i>
@@ -2292,7 +2357,7 @@ function YardTab({
             onPointerMove={onMove}
             onPointerDown={onCanvasDown}
             onDoubleClick={() => setGhost(null)}
-            style={{ minWidth: Math.min(VBW, 640), touchAction: "none", cursor: tool === "measure" ? "crosshair" : "default" }}
+            style={{ minWidth: Math.min(VBW, 640), touchAction: "none", cursor: tool === "measure" || placingKind ? "crosshair" : "default" }}
             role="img"
             aria-label="Top-down plan of the backyard"
           >
@@ -2354,17 +2419,37 @@ function YardTab({
                   {k.shape === "circle" ? (
                     <circle cx={cx} cy={cy} r={(f.w / 2) * SCALE} fill={fill} opacity="0.22"
                       stroke={fill} strokeWidth={isSel ? 2.4 : 1} strokeDasharray={f.kind === "tree" ? "4 3" : undefined} />
+                  ) : k.shape === "line" ? (
+                    <>
+                      <line x1={px(f.x)} y1={cy} x2={px(f.x + f.w)} y2={cy}
+                        stroke={fill} strokeWidth={isSel ? 3.5 : 2.5} />
+                      {Array.from({ length: Math.floor(f.w / 4) + 1 }).map((_, i) => (
+                        <circle key={i} cx={px(f.x + Math.min(i * 4, f.w))} cy={cy} r="2.5" fill={fill} />
+                      ))}
+                    </>
                   ) : (
                     <rect x={px(f.x)} y={px(f.y)} width={f.w * SCALE} height={f.d * SCALE} rx="2"
                       fill={k.hatch ? "url(#ortoHouse)" : fill} opacity={k.hatch ? 0.5 : 0.22}
                       stroke={fill} strokeWidth={isSel ? 2.4 : 1} />
                   )}
                   {f.kind === "tree" && <circle cx={cx} cy={cy} r="4" fill="var(--soil)" />}
-                  <text x={cx} y={cy + 4} textAnchor="middle" fontSize="10"
+                  <text x={cx} y={cy + (k.shape === "line" ? -6 : 4)} textAnchor="middle" fontSize="10"
                     className="svg-mono" fill="var(--ink-soft)" pointerEvents="none">{f.name}</text>
                 </g>
               );
             })}
+
+            {/* pending feature placement */}
+            {placePreview && placingKind && (() => {
+              const pk = FEATURE_KINDS[placingKind];
+              const fill = pk.fill ?? "#999";
+              const w = Math.max(placePreview.w, 0.15), d = Math.max(placePreview.d, 0.15);
+              return (
+                <rect x={px(placePreview.x)} y={px(placePreview.y)} width={w * SCALE} height={d * SCALE}
+                  rx="2" fill={fill} opacity="0.25" stroke={fill} strokeWidth="1.5"
+                  strokeDasharray="4 3" pointerEvents="none" />
+              );
+            })()}
 
             {/* perennial fruit */}
             {plantings.map((p) => {
