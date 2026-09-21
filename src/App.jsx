@@ -4292,6 +4292,7 @@ function Styles() {
   --rule:#DEE3D5; --rule-soft:#EAEDE4;
   --olive:#2C843E; --pomodoro:#A32E27; --chicory:#3B5A73; --soil:#6B5344; --berry:#8A3A5B;
   --headdark:#1B3729; --headlight:#2B5037; --gold:#CC9E11;
+  --gridline:#9DAE8A;
   background:var(--limewash); color:var(--ink);
   font-family:'Archivo', system-ui, sans-serif; font-size:14px; line-height:1.55;
 }
@@ -4577,13 +4578,13 @@ function Styles() {
 
 /* the grid */
 .orto-gridscroll{overflow-x:auto; padding:2px;}
-.orto-grid{display:grid; gap:3px;
+.orto-grid{display:grid; gap:4px;
   background:
-    repeating-linear-gradient(0deg, var(--rule-soft) 0 1px, transparent 1px 12px),
-    repeating-linear-gradient(90deg, var(--rule-soft) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(0deg, var(--gridline) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(90deg, var(--gridline) 0 1px, transparent 1px 12px),
     #FDFDFA;
-  padding:6px; border:1px solid var(--rule); border-radius:6px;}
-.orto-cell{aspect-ratio:1; border:1px solid var(--rule); border-radius:2px; background:rgba(255,255,255,.72);
+  padding:6px; border:1.5px solid var(--gridline); border-radius:6px;}
+.orto-cell{aspect-ratio:1; border:2px solid var(--gridline); border-radius:2px; background:rgba(255,255,255,.85);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; padding:2px; overflow:hidden; transition:transform .08s ease;}
 .orto-cell:hover{transform:scale(1.04); z-index:2;}
 .orto-cell-name{font-size:9.5px; line-height:1.05; color:#fff; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;}
