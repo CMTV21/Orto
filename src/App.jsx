@@ -1037,7 +1037,7 @@ const defaultFrost = (year) => ({ last: `${year}-05-08`, first: `${year}-10-10` 
 
 /* ============================================================ */
 
-export default function GardenPlanner() {
+export default function GardenPlanner({ userEmail, onLogout }) {
   const [state, setStateRaw] = useState(null);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
@@ -1612,6 +1612,12 @@ export default function GardenPlanner() {
               <button onClick={redo} disabled={!redoStack.length} title="Redo (⌘/Ctrl+Shift+Z)">↷</button>
             </div>
             <span className="orto-save">{status}</span>
+            {onLogout && (
+              <span className="orto-account">
+                {userEmail}
+                <button onClick={onLogout} title="Sign out">Sign out</button>
+              </span>
+            )}
           </div>
         </div>
         <nav className="orto-tabs">
@@ -4502,6 +4508,9 @@ function Styles() {
 .orto-year select{font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:#FBFBF6; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.28); border-radius:6px; padding:3px 6px;}
 .orto-stat i{font-style:normal; color:rgba(255,255,255,.6); opacity:.85;}
 .orto-save{min-width:70px; color:var(--gold);}
+.orto-account{display:flex; align-items:center; gap:8px; color:rgba(255,255,255,.6); font-size:11px;}
+.orto-account button{background:none; border:1px solid rgba(255,255,255,.28); border-radius:6px; padding:3px 8px; color:rgba(255,255,255,.75); font-size:11px;}
+.orto-account button:hover{border-color:#fff; color:#fff;}
 .orto-undoredo{display:flex; gap:2px;}
 .orto-undoredo button{width:24px; height:24px; border:1px solid rgba(255,255,255,.28); border-radius:6px; background:transparent; color:rgba(255,255,255,.75); font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;}
 .orto-undoredo button:hover:not(:disabled){border-color:#fff; color:#fff;}

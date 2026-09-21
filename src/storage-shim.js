@@ -1,21 +1,25 @@
 /**
  * Replaces the `window.storage` API that only exists inside a Claude
- * artifact. Same shape (async get/set/delete returning {key, value} or
- * null), backed by the browser's own localStorage instead.
+ * artifact. Same shape (async get/set/delete/list returning {key, value}
+ * or null), now backed by the account API in worker/index.js instead of
+ * localStorage — each key is scoped to whoever is signed in, server-side.
  *
- * This is the only thing that had to change to take the app out of the
- * chat — every storage call in App.jsx is unmodified.
+ * This is the only thing that had to change to add accounts: every
+ * storage call in App.jsx is unmodified, since it only ever spoke to
+ * this same get/set/delete/list shape.
  */
 
-const PREFIX = "orto:";
-
 function makeStorage() {
+  const base = "/api/kv";
+
   return {
     async get(key) {
       try {
-        const raw = localStorage.getItem(PREFIX + key);
-        if (raw === null) return null;
-        return { key, value: raw };
+        const r = await fetch(`${base}/${encodeURIComponent(key)}`, { credentials: "same-origin" });
+        if (r.status === 404) return null;
+        if (!r.ok) return null;
+        const value = await r.text();
+        return { key, value };
       } catch {
         return null;
       }
@@ -23,18 +27,23 @@ function makeStorage() {
 
     async set(key, value) {
       try {
-        localStorage.setItem(PREFIX + key, value);
+        const r = await fetch(`${base}/${encodeURIComponent(key)}`, {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "Content-Type": "text/plain" },
+          body: value,
+        });
+        if (!r.ok) return null;
         return { key, value };
       } catch {
-        // Most likely quota exceeded (localStorage caps around 5-10MB per
-        // origin). A garden plan is small text, so this should be rare.
         return null;
       }
     },
 
     async delete(key) {
       try {
-        localStorage.removeItem(PREFIX + key);
+        const r = await fetch(`${base}/${encodeURIComponent(key)}`, { method: "DELETE", credentials: "same-origin" });
+        if (!r.ok) return null;
         return { key, deleted: true };
       } catch {
         return null;
@@ -43,13 +52,10 @@ function makeStorage() {
 
     async list(prefix) {
       try {
-        const keys = [];
-        const scan = prefix ? PREFIX + prefix : PREFIX;
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith(scan)) keys.push(k.slice(PREFIX.length));
-        }
-        return { keys };
+        const r = await fetch(`${base}?prefix=${encodeURIComponent(prefix || "")}`, { credentials: "same-origin" });
+        if (!r.ok) return null;
+        const data = await r.json();
+        return { keys: data.keys };
       } catch {
         return null;
       }
