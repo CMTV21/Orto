@@ -400,6 +400,86 @@ const FEATURE_CATS = {
 
 const bedFootprint = (b) => (b.rot === 90 ? { w: b.l, d: b.w } : { w: b.w, d: b.l });
 
+/* A bed is normally a plain w×l rectangle. A shaped bed (L or U) additionally
+   carries `mask`, a w*l boolean array over that same bounding box saying
+   which unit squares are actually part of the bed — the rest is void, drawn
+   as a real notch rather than a rectangle standing in for one. */
+const bedAreaSqFt = (bed) => (bed.mask ? bed.mask.reduce((n, on) => n + (on ? 1 : 0), 0) : bed.w * bed.l);
+
+/* Traces a mask's outline into merged straight wall runs — the unit edges
+   between an in-shape cell and an out-of-shape (or off-grid) neighbor,
+   merged end to end along each grid line. For a plain rectangle (no mask)
+   this always comes out to exactly the 4 sides. Used for both the lumber
+   cut list and drawing the real outline in the yard plan. */
+function bedWallRuns(w, l, mask) {
+  const inShape = (r, c) => {
+    if (r < 0 || r >= l || c < 0 || c >= w) return false;
+    return mask ? !!mask[r * w + c] : true;
+  };
+  const hSegs = [], vSegs = [];
+  for (let r = 0; r < l; r++) {
+    for (let c = 0; c < w; c++) {
+      if (!inShape(r, c)) continue;
+      if (!inShape(r - 1, c)) hSegs.push({ y: r, x: c });
+      if (!inShape(r + 1, c)) hSegs.push({ y: r + 1, x: c });
+      if (!inShape(r, c - 1)) vSegs.push({ x: c, y: r });
+      if (!inShape(r, c + 1)) vSegs.push({ x: c + 1, y: r });
+    }
+  }
+  const mergeRuns = (segs, fixedKey, varKey) => {
+    const byKey = new Map();
+    segs.forEach((s) => {
+      if (!byKey.has(s[fixedKey])) byKey.set(s[fixedKey], []);
+      byKey.get(s[fixedKey]).push(s[varKey]);
+    });
+    const runs = [];
+    byKey.forEach((arr, k) => {
+      arr.sort((a, b) => a - b);
+      let start = arr[0], prev = arr[0];
+      for (let i = 1; i <= arr.length; i++) {
+        if (i < arr.length && arr[i] === prev + 1) { prev = arr[i]; continue; }
+        runs.push({ [fixedKey]: k, start, end: prev + 1 });
+        if (i < arr.length) { start = arr[i]; prev = arr[i]; }
+      }
+    });
+    return runs;
+  };
+  const hRuns = mergeRuns(hSegs, "y", "x").map((r) => ({ orientation: "h", x: r.start, y: r.y, len: r.end - r.start }));
+  const vRuns = mergeRuns(vSegs, "x", "y").map((r) => ({ orientation: "v", x: r.x, y: r.start, len: r.end - r.start }));
+  return [...hRuns, ...vRuns];
+}
+
+/* Shape presets: a couple of plain numbers stand in for a hand-drawn
+   polygon. Both describe a base/legs made of whole-foot squares so they
+   drop straight onto the planting grid with no fractional cells. */
+function shapeToBed(shape, p) {
+  if (shape === "l") {
+    const w = Math.min(Math.max(2, Math.round(p.outerW) || 2), 20);
+    const l = Math.min(Math.max(2, Math.round(p.outerL) || 2), 30);
+    const leg = Math.min(Math.max(1, Math.round(p.legWidth) || 1), Math.min(w, l) - 1);
+    const mask = Array(w * l).fill(false);
+    for (let r = 0; r < l; r++) for (let c = 0; c < w; c++) {
+      if (c < leg || r < leg) mask[r * w + c] = true;
+    }
+    return { w, l, mask };
+  }
+  if (shape === "u") {
+    const w = Math.min(Math.max(3, Math.round(p.outerW) || 3), 20);
+    const baseDepth = Math.min(Math.max(1, Math.round(p.baseDepth) || 1), 20);
+    const armLength = Math.min(Math.max(1, Math.round(p.armLength) || 1), 25);
+    const armWidth = Math.min(Math.max(1, Math.round(p.armWidth) || 1), Math.floor((w - 1) / 2));
+    const l = Math.min(baseDepth + armLength, 30);
+    const mask = Array(w * l).fill(false);
+    for (let r = 0; r < l; r++) for (let c = 0; c < w; c++) {
+      const inBase = r < baseDepth;
+      const inArm = r >= baseDepth && (c < armWidth || c >= w - armWidth);
+      if (inBase || inArm) mask[r * w + c] = true;
+    }
+    return { w, l, mask };
+  }
+  return null;
+}
+
 /* Shortest distance from a point to a line segment, in the same units as the points. */
 function pointToSegment(p, a, b) {
   const dx = b.x - a.x, dy = b.y - a.y;
@@ -644,26 +724,46 @@ function bedBuild(bed, opts) {
   const courses = Math.max(1, Math.round(depth / board.h));
   const wallIn = courses * board.h;
 
-  const longFt = Math.max(bed.w, bed.l);
-  const shortFt = Math.min(bed.w, bed.l);
-  // Long boards run the full run; short boards fit between them.
-  const longIn = longFt * 12;
-  const shortIn = shortFt * 12 - (opts.posts ? 0 : 2 * board.t);
-
   const pieces = [];
-  for (let c = 0; c < courses; c++) {
-    pieces.push({ len: longIn, label: `${bed.name} · side`, bed: bed.id });
-    pieces.push({ len: longIn, label: `${bed.name} · side`, bed: bed.id });
-    pieces.push({ len: shortIn, label: `${bed.name} · end`, bed: bed.id });
-    pieces.push({ len: shortIn, label: `${bed.name} · end`, bed: bed.id });
+  let longIn, shortIn, corners;
+
+  if (bed.mask) {
+    // A shaped bed has more than 4 corners, so there's no clean "2 long
+    // sides overlap the 2 short ends" lap joint to fall back on — every
+    // wall run just meets its neighbor at a post instead, full length.
+    const runs = bedWallRuns(bed.w, bed.l, bed.mask);
+    corners = runs.length;
+    runs.forEach((run) => {
+      for (let c = 0; c < courses; c++) pieces.push({ len: run.len * 12, label: `${bed.name} · wall`, bed: bed.id });
+    });
+    const lens = runs.map((r) => r.len);
+    longIn = Math.max(...lens) * 12;
+    shortIn = Math.min(...lens) * 12;
+  } else {
+    corners = 4;
+    const longFt = Math.max(bed.w, bed.l);
+    const shortFt = Math.min(bed.w, bed.l);
+    // Long boards run the full run; short boards fit between them.
+    longIn = longFt * 12;
+    shortIn = shortFt * 12 - (opts.posts ? 0 : 2 * board.t);
+    for (let c = 0; c < courses; c++) {
+      pieces.push({ len: longIn, label: `${bed.name} · side`, bed: bed.id });
+      pieces.push({ len: longIn, label: `${bed.name} · side`, bed: bed.id });
+      pieces.push({ len: shortIn, label: `${bed.name} · end`, bed: bed.id });
+      pieces.push({ len: shortIn, label: `${bed.name} · end`, bed: bed.id });
+    }
   }
 
-  const postLenIn = opts.posts ? wallIn + 10 : 0;
-  const screws = courses * 4 * (opts.posts ? 4 : 2);
-  const fabricSqFt = bed.w * bed.l;
-  const soilCuFt = bed.w * bed.l * (wallIn / 12);
+  // A shaped bed's corners aren't optional the way a plain box's are — there's
+  // no lap joint that works around a concave turn, so it always gets posts
+  // regardless of the global toggle.
+  const usesPosts = opts.posts || !!bed.mask;
+  const postLenIn = usesPosts ? wallIn + 10 : 0;
+  const screws = courses * corners * (usesPosts ? 4 : 2);
+  const fabricSqFt = bedAreaSqFt(bed);
+  const soilCuFt = fabricSqFt * (wallIn / 12);
 
-  return { bed, courses, wallIn, pieces, longIn, shortIn, postLenIn, screws, fabricSqFt, soilCuFt };
+  return { bed, courses, wallIn, pieces, longIn, shortIn, postLenIn, screws, fabricSqFt, soilCuFt, corners };
 }
 
 const inchesToFtIn = (v) => {
@@ -1060,7 +1160,8 @@ export default function GardenPlanner() {
     setState((s) => {
       const bed = s.beds.find((b) => b.id === bedId);
       const p = { ...(s.plans[year] || {}) };
-      p[bedId] = Array(bed.w * bed.l).fill(brush === "__erase" ? null : brush);
+      const val = brush === "__erase" ? null : brush;
+      p[bedId] = blankCells(bed.w, bed.l).map((_, i) => (!bed.mask || bed.mask[i] ? val : null));
       return { ...s, plans: { ...s.plans, [year]: p } };
     });
   };
@@ -1074,7 +1175,7 @@ export default function GardenPlanner() {
     });
   };
 
-  const addBed = (name, w, l, note) => {
+  const addBed = ({ name, w, l, note, shape, mask, shapeParams }) => {
     const id = "b" + Math.random().toString(36).slice(2, 8);
     setState((s) => {
       const plans = { ...s.plans };
@@ -1088,7 +1189,9 @@ export default function GardenPlanner() {
           if (!clash) { spot = { x: xx, y: yy }; break outer; }
         }
       }
-      return { ...s, beds: [...s.beds, { id, name, w, l, note, depth: 12, rot: 0, ...spot }], plans };
+      const bed = { id, name, w, l, note, depth: 12, rot: 0, ...spot };
+      if (mask) { bed.shape = shape; bed.mask = mask; bed.shapeParams = shapeParams; }
+      return { ...s, beds: [...s.beds, bed], plans };
     });
     setActiveBed(id);
     setShowBedForm(false);
@@ -1394,7 +1497,7 @@ export default function GardenPlanner() {
     );
   }
 
-  const totalSqFt = beds.reduce((n, b) => n + b.w * b.l, 0);
+  const totalSqFt = beds.reduce((n, b) => n + bedAreaSqFt(b), 0);
   const plantedSqFt = Object.values(plan).reduce((n, arr) => n + (arr || []).filter(Boolean).length, 0);
 
   return (
@@ -1491,7 +1594,7 @@ export default function GardenPlanner() {
           />
         )}
 
-        {tab === "plot" && bed && (
+        {tab === "plot" && (
           <div className="orto-plot">
             {/* palette */}
             <aside className="orto-panel orto-palette">
@@ -1574,51 +1677,62 @@ export default function GardenPlanner() {
 
               {showBedForm && <BedForm onAdd={addBed} onCancel={() => setShowBedForm(false)} />}
 
-              <div className="orto-panel orto-bedwrap">
-                <div className="orto-bedhead">
-                  <div>
-                    <h2 className="orto-h2">{bed.name}</h2>
-                    <p className="orto-fine">{bed.note || "—"} · {bed.w} ft × {bed.l} ft · {bed.w * bed.l} sq ft</p>
+              {bed ? (
+                <div className="orto-panel orto-bedwrap">
+                  <div className="orto-bedhead">
+                    <div>
+                      <h2 className="orto-h2">{bed.name}</h2>
+                      <p className="orto-fine">{bed.note || "—"} · {bed.w} ft × {bed.l} ft{bed.mask ? " outer" : ""} · {bedAreaSqFt(bed)} sq ft</p>
+                    </div>
+                    <div className="orto-bedtools mono">
+                      <button onClick={() => fillBed(bed.id)}>Fill bed</button>
+                      <button onClick={() => clearBed(bed.id)}>Empty bed</button>
+                      <BedEdit bed={bed} onSave={updateBed} onDelete={removeBed} canDelete={beds.length > 1} yard={yard} />
+                    </div>
                   </div>
-                  <div className="orto-bedtools mono">
-                    <button onClick={() => fillBed(bed.id)}>Fill bed</button>
-                    <button onClick={() => clearBed(bed.id)}>Empty bed</button>
-                    <BedEdit bed={bed} onSave={updateBed} onDelete={removeBed} canDelete={beds.length > 1} yard={yard} />
-                  </div>
-                </div>
 
-                <div className="orto-gridscroll">
-                  <div
-                    className="orto-grid"
-                    style={{ gridTemplateColumns: `repeat(${bed.w}, minmax(46px, 1fr))`, maxWidth: bed.w * 78 }}
-                  >
-                    {cells.map((cid, i) => {
-                      const c = cid ? CROP_BY_ID[cid] : null;
-                      return (
-                        <button
-                          key={i}
-                          className="orto-cell"
-                          style={c ? { background: FAMILY[c.fam].color, borderColor: FAMILY[c.fam].color } : undefined}
-                          title={c ? `${c.name} — ${c.spacing}` : `Square ${i + 1}`}
-                          onPointerDown={() => { painting.current = true; paintCell(bed.id, i); }}
-                          onPointerEnter={() => { if (painting.current) paintCell(bed.id, i); }}
-                        >
-                          {c && (
-                            <>
-                              <span className="orto-cell-name">{c.name.split(" ")[0]}</span>
-                              <span className="mono orto-cell-n">{c.perSqFt >= 1 ? c.perSqFt : "½"}</span>
-                            </>
-                          )}
-                        </button>
-                      );
-                    })}
+                  <div className="orto-gridscroll">
+                    <div
+                      className="orto-grid"
+                      style={{ gridTemplateColumns: `repeat(${bed.w}, minmax(46px, 1fr))`, maxWidth: bed.w * 78 }}
+                    >
+                      {cells.map((cid, i) => {
+                        if (bed.mask && !bed.mask[i]) {
+                          return <div key={i} className="orto-cell-void" aria-hidden="true" />;
+                        }
+                        const c = cid ? CROP_BY_ID[cid] : null;
+                        return (
+                          <button
+                            key={i}
+                            className="orto-cell"
+                            style={c ? { background: FAMILY[c.fam].color, borderColor: FAMILY[c.fam].color } : undefined}
+                            title={c ? `${c.name} — ${c.spacing}` : `Square ${i + 1}`}
+                            onPointerDown={() => { painting.current = true; paintCell(bed.id, i); }}
+                            onPointerEnter={() => { if (painting.current) paintCell(bed.id, i); }}
+                          >
+                            {c && (
+                              <>
+                                <span className="orto-cell-name">{c.name.split(" ")[0]}</span>
+                                <span className="mono orto-cell-n">{c.perSqFt >= 1 ? c.perSqFt : "½"}</span>
+                              </>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+                  <p className="orto-fine">Each square is one square foot. Click or drag to plant.</p>
                 </div>
-                <p className="orto-fine">Each square is one square foot. Click or drag to plant.</p>
-              </div>
+              ) : (
+                <div className="orto-panel">
+                  <h2 className="orto-h2">No beds yet</h2>
+                  <p className="orto-empty">Add your first bed above — rectangle, L-shape, or U-shape — to start planting.</p>
+                </div>
+              )}
             </section>
 
             {/* inspector */}
+            {bed && (
             <aside className="orto-panel orto-inspector">
               <h2 className="orto-h2">In this bed</h2>
               {lastYear && (
@@ -1674,6 +1788,7 @@ export default function GardenPlanner() {
                 </div>
               )}
             </aside>
+            )}
           </div>
         )}
 
@@ -1996,11 +2111,11 @@ function YardTab({
   }, [beds, plan]);
 
   const soil = useMemo(() => {
-    const cuft = beds.reduce((n, b) => n + b.w * b.l * ((b.depth ?? 12) / 12), 0);
+    const cuft = beds.reduce((n, b) => n + bedAreaSqFt(b) * ((b.depth ?? 12) / 12), 0);
     return { cuft, cuyd: cuft / 27, third: cuft / 3 };
   }, [beds]);
 
-  const totalBedSqFt = beds.reduce((n, b) => n + b.w * b.l, 0);
+  const totalBedSqFt = beds.reduce((n, b) => n + bedAreaSqFt(b), 0);
   const yardSqFt = yard.w * yard.d;
   const selFeatureObj = features.find((f) => f.id === selFeature);
   const selPlantingObj = plantings.find((p) => p.id === selPlanting);
@@ -2221,6 +2336,36 @@ function YardTab({
               const bad = anyOverlap.has(b.id);
               const bands = bedBands[b.id] || [];
               const X = px(b.x), Y = px(b.y), W = fp.w * SCALE, H = fp.d * SCALE;
+              const strokeColor = bad ? "var(--pomodoro)" : isSel ? "var(--ink)" : "var(--soil)";
+              const strokeW = bad || isSel ? 2.4 : 1;
+
+              if (b.mask) {
+                // Shaped beds aren't rotated (see the Yard tab side panel),
+                // so local (unrotated) coordinates already match the plan.
+                const runs = bedWallRuns(b.w, b.l, b.mask);
+                return (
+                  <g key={b.id} onPointerDown={(e) => onDown(e, "bed", b)} style={{ cursor: "grab" }}>
+                    {b.mask.map((on, i) => {
+                      if (!on) return null;
+                      const r = Math.floor(i / b.w), c = i % b.w;
+                      return <rect key={i} x={X + c * SCALE} y={Y + r * SCALE} width={SCALE} height={SCALE} fill="#DFD6C6" />;
+                    })}
+                    {runs.map((run, i) => {
+                      const x1 = X + run.x * SCALE, y1 = Y + run.y * SCALE;
+                      const x2 = run.orientation === "h" ? x1 + run.len * SCALE : x1;
+                      const y2 = run.orientation === "v" ? y1 + run.len * SCALE : y1;
+                      return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={strokeColor} strokeWidth={strokeW} strokeLinecap="square" />;
+                    })}
+                    <text x={X + W / 2} y={Y + H / 2 - 1} textAnchor="middle" fontSize="10.5" className="svg-body" fill="var(--ink)">
+                      {b.name.length > 18 ? b.name.slice(0, 17) + "…" : b.name}
+                    </text>
+                    <text x={X + W / 2} y={Y + H / 2 + 12} textAnchor="middle" fontSize="9.5" className="svg-mono" fill="var(--ink-soft)">
+                      {b.w}×{b.l}
+                    </text>
+                  </g>
+                );
+              }
+
               let acc = 0;
               return (
                 <g key={b.id} onPointerDown={(e) => onDown(e, "bed", b)} style={{ cursor: "grab" }}>
@@ -2231,9 +2376,7 @@ function YardTab({
                     acc += bw;
                     return <rect key={i} x={bx} y={Y} width={bw} height={H} fill={band.color} opacity="0.62" />;
                   })}
-                  <rect x={X} y={Y} width={W} height={H} rx="2" fill="none"
-                    stroke={bad ? "var(--pomodoro)" : isSel ? "var(--ink)" : "var(--soil)"}
-                    strokeWidth={bad || isSel ? 2.4 : 1} />
+                  <rect x={X} y={Y} width={W} height={H} rx="2" fill="none" stroke={strokeColor} strokeWidth={strokeW} />
                   <text x={X + W / 2} y={Y + H / 2 - 1} textAnchor="middle" fontSize="10.5" className="svg-body" fill="var(--ink)">
                     {b.name.length > 18 ? b.name.slice(0, 17) + "…" : b.name}
                   </text>
@@ -2340,10 +2483,11 @@ function YardTab({
             <h2 className="orto-h2">{sel.name}</h2>
             <p className="orto-fine">{sel.w} ft × {sel.l} ft · sitting at {ftIn(sel.x)} across, {ftIn(sel.y)} down</p>
             <div className="orto-bedtools mono" style={{ marginTop: 8 }}>
-              <button onClick={() => rotateBed(sel.id)}>Turn {sel.rot === 90 ? "lengthways" : "sideways"}</button>
+              {!sel.mask && <button onClick={() => rotateBed(sel.id)}>Turn {sel.rot === 90 ? "lengthways" : "sideways"}</button>}
               <button onClick={() => duplicateBed(sel.id)}>Duplicate</button>
               <button onClick={openPlot}>Plant this bed</button>
             </div>
+            {sel.mask && <p className="orto-fine">Shaped beds don't rotate yet — build them facing the way you want.</p>}
 
             <p className="mono orto-dates">
               Diagonal {ftIn(Math.hypot(sel.w, sel.l))} — both should read the same when the frame is square.
@@ -2399,7 +2543,7 @@ function YardTab({
               <input type="number" min="4" max="36" step="1" value={sel.depth ?? 12}
                 onChange={(e) => updateBed(sel.id, { depth: Number(e.target.value) || 12 })} /> in
             </label>
-            <p className="orto-fine">{(sel.w * sel.l * ((sel.depth ?? 12) / 12)).toFixed(1)} cu ft to fill this bed.</p>
+            <p className="orto-fine">{(bedAreaSqFt(sel) * ((sel.depth ?? 12) / 12)).toFixed(1)} cu ft to fill this bed.</p>
           </>
         )}
 
@@ -2757,14 +2901,17 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
   const pack = useMemo(() => bestPack(allPieces), [allPieces]);
 
   const posts = useMemo(() => {
-    if (!build.posts) return null;
-    const per = builds[0]?.postLenIn ?? 0;
-    const each = builds.map((x) => ({ n: 4, len: x.postLenIn }));
+    // A bed's own postLenIn is already 0 unless it actually needs posts —
+    // globally toggled on, or a shaped bed where they're not optional.
+    const withPosts = builds.filter((x) => x.postLenIn > 0);
+    if (!withPosts.length) return null;
+    const per = withPosts[0].postLenIn;
+    const each = withPosts.map((x) => ({ n: x.corners, len: x.postLenIn }));
     const total = each.reduce((n, e) => n + e.n, 0);
-    const maxLen = Math.max(...builds.map((x) => x.postLenIn), 0);
+    const maxLen = Math.max(...withPosts.map((x) => x.postLenIn), 0);
     const perStock = Math.floor((8 * 12) / (maxLen + KERF));
     return { total, maxLen, per, stock8: Math.ceil(total / Math.max(perStock, 1)), perStock };
-  }, [builds, build.posts]);
+  }, [builds]);
 
   const totals = useMemo(() => {
     const screws = builds.reduce((n, x) => n + x.screws, 0);
@@ -2838,21 +2985,36 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
                   <div className="orto-cutdetail">
                     <table className="orto-cuttable">
                       <tbody>
-                        <tr>
-                          <td className="mono">{x.courses * 2}</td>
-                          <td>sides</td>
-                          <td className="mono">{inchesToFtIn(x.longIn)}</td>
-                          <td className="orto-fine">full length, no cut needed on a matching board</td>
-                        </tr>
-                        <tr>
-                          <td className="mono">{x.courses * 2}</td>
-                          <td>ends</td>
-                          <td className="mono">{inchesToFtIn(x.shortIn)}</td>
-                          <td className="orto-fine">{build.posts ? "full inside width" : `${Math.min(x.bed.w, x.bed.l)} ft less two board thicknesses`}</td>
-                        </tr>
-                        {build.posts && (
+                        {x.bed.mask ? (
+                          Object.entries(
+                            x.pieces.reduce((acc, p) => { acc[p.len] = (acc[p.len] || 0) + 1; return acc; }, {})
+                          ).sort((a, b) => b[0] - a[0]).map(([len, n]) => (
+                            <tr key={len}>
+                              <td className="mono">{n}</td>
+                              <td>wall boards</td>
+                              <td className="mono">{inchesToFtIn(Number(len))}</td>
+                              <td className="orto-fine">meets its neighbor at a post — {x.corners} corners around this shape</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <>
+                            <tr>
+                              <td className="mono">{x.courses * 2}</td>
+                              <td>sides</td>
+                              <td className="mono">{inchesToFtIn(x.longIn)}</td>
+                              <td className="orto-fine">full length, no cut needed on a matching board</td>
+                            </tr>
+                            <tr>
+                              <td className="mono">{x.courses * 2}</td>
+                              <td>ends</td>
+                              <td className="mono">{inchesToFtIn(x.shortIn)}</td>
+                              <td className="orto-fine">{build.posts ? "full inside width" : `${Math.min(x.bed.w, x.bed.l)} ft less two board thicknesses`}</td>
+                            </tr>
+                          </>
+                        )}
+                        {x.postLenIn > 0 && (
                           <tr>
-                            <td className="mono">4</td>
+                            <td className="mono">{x.corners}</td>
                             <td>corner posts</td>
                             <td className="mono">{inchesToFtIn(x.postLenIn)}</td>
                             <td className="orto-fine">4×4, wall height plus 10″ driven in</td>
@@ -2946,7 +3108,7 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
           </span>
         </div>
 
-        {build.posts && posts && (
+        {posts && (
           <div className="orto-buyrow">
             <span className="mono orto-buyn">{posts.stock8}</span>
             <span>
@@ -3576,7 +3738,8 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
   const fabricSqFt = builds.reduce((n, x) => n + x.fabricSqFt, 0);
   const screws = builds.reduce((n, x) => n + x.screws, 0);
   const lumberCost = pack ? pack.totalFt * (build.ppf || 0) * board.priceMult : 0;
-  const totalSqFt = beds.reduce((n, b) => n + b.w * b.l, 0);
+  const totalSqFt = beds.reduce((n, b) => n + bedAreaSqFt(b), 0);
+  const totalPosts = builds.reduce((n, x) => n + (x.postLenIn > 0 ? x.corners : 0), 0);
 
   const needs = useMemo(() => computeSeedNeeds(gardenTally), [gardenTally]);
   const order = useMemo(() => computeSeedOrder(needs, seeds, today), [needs, seeds]);
@@ -3637,7 +3800,7 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
             <div className="orto-printgrid">
               <div><span>Lumber</span><p>{pack.bars.length} × {pack.stockFt} ft {board.label}, {mat.label.toLowerCase()}</p></div>
               <div><span>Board feet</span><p>{pack.totalFt} lin ft{lumberCost > 0 ? ` · ~$${lumberCost.toFixed(0)}` : ""}</p></div>
-              {build.posts && <div><span>Corner posts</span><p>{builds.length * 4} × 2×4</p></div>}
+              {totalPosts > 0 && <div><span>Corner posts</span><p>{totalPosts} × 2×4</p></div>}
               {build.fabric && <div><span>Landscape fabric</span><p>{fabricSqFt.toFixed(0)} sq ft</p></div>}
               <div><span>Screws</span><p>~{screws}</p></div>
             </div>
@@ -3973,26 +4136,77 @@ function CustomCropForm({ onAdd, onCancel }) {
   );
 }
 
+const DEFAULT_SHAPE_PARAMS = { outerW: 8, outerL: 8, legWidth: 3, baseDepth: 2, armWidth: 3, armLength: 5 };
+
+/* The handful of numbers each shape preset needs, shared between adding a
+   new bed and editing an existing shaped one. */
+function ShapeFields({ shape, params, onChange }) {
+  const set = (patch) => onChange({ ...params, ...patch });
+  if (shape === "u") {
+    return (
+      <div className="orto-formrow">
+        <label>Outer width (ft)<input className="orto-input mono" type="number" min="3" max="20" step="1" value={params.outerW} onChange={(e) => set({ outerW: Number(e.target.value) || 3 })} /></label>
+        <label>Base depth (ft)<input className="orto-input mono" type="number" min="1" max="20" step="1" value={params.baseDepth} onChange={(e) => set({ baseDepth: Number(e.target.value) || 1 })} /></label>
+        <label>Arm width (ft)<input className="orto-input mono" type="number" min="1" max="10" step="1" value={params.armWidth} onChange={(e) => set({ armWidth: Number(e.target.value) || 1 })} /></label>
+        <label>Arm length (ft)<input className="orto-input mono" type="number" min="1" max="25" step="1" value={params.armLength} onChange={(e) => set({ armLength: Number(e.target.value) || 1 })} /></label>
+      </div>
+    );
+  }
+  return (
+    <div className="orto-formrow">
+      <label>Outer width (ft)<input className="orto-input mono" type="number" min="2" max="20" step="1" value={params.outerW} onChange={(e) => set({ outerW: Number(e.target.value) || 2 })} /></label>
+      <label>Outer length (ft)<input className="orto-input mono" type="number" min="2" max="30" step="1" value={params.outerL} onChange={(e) => set({ outerL: Number(e.target.value) || 2 })} /></label>
+      <label>Leg width (ft)<input className="orto-input mono" type="number" min="1" max="10" step="1" value={params.legWidth} onChange={(e) => set({ legWidth: Number(e.target.value) || 1 })} /></label>
+    </div>
+  );
+}
+
 function BedForm({ onAdd, onCancel }) {
+  const [shape, setShape] = useState("rect");
   const [name, setName] = useState("");
   const [w, setW] = useState(4);
   const [l, setL] = useState(8);
   const [note, setNote] = useState("");
-  const valid = name.trim() && w >= 1 && l >= 1 && w <= 20 && l <= 30;
+  const [params, setParams] = useState(DEFAULT_SHAPE_PARAMS);
+
+  const shaped = shape !== "rect" ? shapeToBed(shape, params) : null;
+  const valid = name.trim() && (shape === "rect" ? (w >= 1 && l >= 1 && w <= 20 && l <= 30) : !!shaped);
+
+  const handleAdd = () => {
+    if (shape === "rect") {
+      onAdd({ name: name.trim(), w, l, note: note.trim() });
+    } else {
+      onAdd({ name: name.trim(), w: shaped.w, l: shaped.l, note: note.trim(), shape, mask: shaped.mask, shapeParams: params });
+    }
+  };
+
   return (
     <div className="orto-panel orto-bedform">
       <h3 className="orto-h3">Add a bed</h3>
+      <div className="orto-segmented" style={{ marginBottom: 10 }}>
+        {[["rect", "Rectangle"], ["l", "L-shape"], ["u", "U-shape"]].map(([k, label]) => (
+          <button key={k} className={shape === k ? "on" : ""} onClick={() => setShape(k)}>{label}</button>
+        ))}
+      </div>
       <div className="orto-formrow">
         <label>Name<input className="orto-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Side bed" /></label>
-        <label>Width (ft)<input className="orto-input mono" type="number" min="1" max="20" value={w} onChange={(e) => setW(Number(e.target.value))} /></label>
-        <label>Length (ft)<input className="orto-input mono" type="number" min="1" max="30" value={l} onChange={(e) => setL(Number(e.target.value))} /></label>
+        {shape === "rect" && (
+          <>
+            <label>Width (ft)<input className="orto-input mono" type="number" min="1" max="20" value={w} onChange={(e) => setW(Number(e.target.value))} /></label>
+            <label>Length (ft)<input className="orto-input mono" type="number" min="1" max="30" value={l} onChange={(e) => setL(Number(e.target.value))} /></label>
+          </>
+        )}
         <label>Note<input className="orto-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Where it sits" /></label>
       </div>
+      {shape !== "rect" && <ShapeFields shape={shape} params={params} onChange={setParams} />}
+      {shaped && (
+        <p className="orto-fine">{shaped.w} × {shaped.l} ft outer footprint · {shaped.mask.filter(Boolean).length} sq ft actually in the bed.</p>
+      )}
       <div className="orto-bedtools mono">
-        <button disabled={!valid} onClick={() => onAdd(name.trim(), w, l, note.trim())}>Add bed</button>
+        <button disabled={!valid} onClick={handleAdd}>Add bed</button>
         <button onClick={onCancel}>Cancel</button>
       </div>
-      <p className="orto-fine">For an L or U shaped bed, add each straight section as its own rectangle.</p>
+      {shape === "rect" && <p className="orto-fine">Need an L or U shape? Pick it above — it's one bed, not several pushed together.</p>}
     </div>
   );
 }
@@ -4004,18 +4218,45 @@ function BedEdit({ bed, onSave, onDelete, canDelete, yard }) {
   const [l, setL] = useState(bed.l);
   const [x, setX] = useState(bed.x);
   const [y, setY] = useState(bed.y);
-  useEffect(() => { setName(bed.name); setW(bed.w); setL(bed.l); setX(bed.x); setY(bed.y); }, [bed.id]);
+  const [params, setParams] = useState(bed.shapeParams || DEFAULT_SHAPE_PARAMS);
+  useEffect(() => {
+    setName(bed.name); setW(bed.w); setL(bed.l); setX(bed.x); setY(bed.y);
+    setParams(bed.shapeParams || DEFAULT_SHAPE_PARAMS);
+  }, [bed.id]);
   if (!open) return <button onClick={() => setOpen(true)}>Resize / move</button>;
 
   const nudge = (dx, dy) => { setX((v) => Math.round((v + dx) * 2) / 2); setY((v) => Math.round((v + dy) * 2) / 2); };
+  const shaped = bed.mask ? shapeToBed(bed.shape, params) : null;
+
+  const handleSave = () => {
+    const fw = shaped ? shaped.w : w;
+    const fl = shaped ? shaped.l : l;
+    const fp = bed.rot === 90 ? { w: fl, d: fw } : { w: fw, d: fl };
+    const cx = yard ? Math.min(Math.max(0, x), Math.max(0, yard.w - fp.w)) : x;
+    const cy = yard ? Math.min(Math.max(0, y), Math.max(0, yard.d - fp.d)) : y;
+    const patch = { name: name.trim() || bed.name, w: fw, l: fl, x: cx, y: cy };
+    if (shaped) { patch.mask = shaped.mask; patch.shapeParams = params; }
+    onSave(bed.id, patch);
+    setOpen(false);
+  };
 
   return (
     <div className="orto-editpop">
       <label>Name<input className="orto-input" value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <div className="orto-formrow" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <label>Width<input className="orto-input mono" type="number" min="1" max="20" value={w} onChange={(e) => setW(Number(e.target.value))} /></label>
-        <label>Length<input className="orto-input mono" type="number" min="1" max="30" value={l} onChange={(e) => setL(Number(e.target.value))} /></label>
-      </div>
+
+      {bed.mask ? (
+        <>
+          <p className="orto-fine" style={{ marginTop: 8 }}>{bed.shape === "u" ? "U-shape" : "L-shape"} dimensions</p>
+          <ShapeFields shape={bed.shape} params={params} onChange={setParams} />
+          {shaped && <p className="orto-fine">{shaped.w} × {shaped.l} ft outer · {shaped.mask.filter(Boolean).length} sq ft in the bed.</p>}
+        </>
+      ) : (
+        <div className="orto-formrow" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <label>Width<input className="orto-input mono" type="number" min="1" max="20" value={w} onChange={(e) => setW(Number(e.target.value))} /></label>
+          <label>Length<input className="orto-input mono" type="number" min="1" max="30" value={l} onChange={(e) => setL(Number(e.target.value))} /></label>
+        </div>
+      )}
+
       <p className="orto-fine" style={{ marginTop: 8 }}>Position — feet from the yard's top-left corner</p>
       <div className="orto-formrow" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <label>X (right)<input className="orto-input mono" type="number" step="0.5" min="0" value={x} onChange={(e) => setX(Number(e.target.value))} /></label>
@@ -4028,13 +4269,7 @@ function BedEdit({ bed, onSave, onDelete, canDelete, yard }) {
         <button onClick={() => nudge(0, 0.5)}>↓ 6in</button>
       </div>
       <div className="orto-bedtools mono">
-        <button onClick={() => {
-          const fp = bed.rot === 90 ? { w: l, d: w } : { w, d: l };
-          const cx = yard ? Math.min(Math.max(0, x), Math.max(0, yard.w - fp.w)) : x;
-          const cy = yard ? Math.min(Math.max(0, y), Math.max(0, yard.d - fp.d)) : y;
-          onSave(bed.id, { name: name.trim() || bed.name, w, l, x: cx, y: cy });
-          setOpen(false);
-        }}>Save</button>
+        <button onClick={handleSave}>Save</button>
         <button onClick={() => setOpen(false)}>Cancel</button>
         {canDelete && <ConfirmButton label="Remove bed" onConfirm={() => { onDelete(bed.id); setOpen(false); }} />}
       </div>
@@ -4353,6 +4588,7 @@ function Styles() {
 .orto-cell:hover{transform:scale(1.04); z-index:2;}
 .orto-cell-name{font-size:9.5px; line-height:1.05; color:#fff; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;}
 .orto-cell-n{font-size:8.5px; color:rgba(255,255,255,.82);}
+.orto-cell-void{aspect-ratio:1;}
 
 /* inspector */
 .orto-inspector{max-height:78vh; overflow-y:auto;}
