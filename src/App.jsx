@@ -2239,7 +2239,7 @@ function YardTab({
           >
             <defs>
               <pattern id="ortoGrid" width={SCALE} height={SCALE} patternUnits="userSpaceOnUse">
-                <path d={`M ${SCALE} 0 L 0 0 0 ${SCALE}`} fill="none" stroke="var(--rule-soft)" strokeWidth="0.6" />
+                <path d={`M ${SCALE} 0 L 0 0 0 ${SCALE}`} fill="none" stroke="var(--gridline)" strokeWidth="1" opacity="0.6" />
               </pattern>
               <pattern id="ortoHouse" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                 <line x1="0" y1="0" x2="0" y2="7" stroke="var(--ink)" strokeWidth="1.6" opacity="0.5" />
