@@ -1276,14 +1276,14 @@ export default function GardenPlanner() {
   });
 
   /* --- perennial fruit --- */
-  const addPlanting = (speciesId) => setState((s) => {
+  const addPlanting = (speciesId, opts = {}) => setState((s) => {
     const sp = BUSHES[speciesId];
     return {
       ...s,
       plantings: [...(s.plantings || []), {
         id: "p" + Math.random().toString(36).slice(2, 8),
         speciesId, variety: "", planted: new Date().getFullYear(),
-        x: 1, y: 1, w: sp.spread, notes: "",
+        x: opts.x ?? 1, y: opts.y ?? 1, w: sp.spread, notes: "",
       }],
     };
   });
@@ -1931,9 +1931,9 @@ function YardTab({
   const clipboard = useRef(null);
   const [showEdges, setShowEdges] = useState(false);
   const [palette, setPalette] = useState(null);
-  const [placingKind, setPlacingKind] = useState(null); // feature kind queued for click/drag placement
-  const [placePreview, setPlacePreview] = useState(null); // {x,y,w,d} ghost rect while placing, for rendering
-  const placing = useRef(null); // {kind, anchor, point} — authoritative drag data, read on pointerup
+  const [placingKind, setPlacingKind] = useState(null); // {item:"feature"|"planting", kind} queued for click/drag placement
+  const [placePreview, setPlacePreview] = useState(null); // ghost while placing: {item:"feature",x,y,w,d} or {item:"planting",cx,cy,w}
+  const placing = useRef(null); // {item, kind, anchor, point} — authoritative drag data, read on pointerup
   const [tool, setTool] = useState("select");
   const [tape, setTape] = useState([]);          // committed points, in feet
   const [ghost, setGhost] = useState(null);      // live cursor point
@@ -2069,8 +2069,12 @@ function YardTab({
     if (placingKind) {
       e.preventDefault();
       const pt = snap(pointerToFt(e));
-      placing.current = { kind: placingKind, anchor: pt, point: pt };
-      setPlacePreview({ x: pt.x, y: pt.y, w: 0, d: 0 });
+      placing.current = { ...placingKind, anchor: pt, point: pt };
+      if (placingKind.item === "planting") {
+        setPlacePreview({ item: "planting", cx: pt.x, cy: pt.y, w: BUSHES[placingKind.kind].spread });
+      } else {
+        setPlacePreview({ item: "feature", x: pt.x, y: pt.y, w: 0, d: 0 });
+      }
       return;
     }
     if (tool === "measure") {
@@ -2096,11 +2100,16 @@ function YardTab({
     if (placing.current) {
       const pt = snap(pointerToFt(e));
       placing.current.point = pt;
-      const { anchor } = placing.current;
-      setPlacePreview({
-        x: Math.min(anchor.x, pt.x), y: Math.min(anchor.y, pt.y),
-        w: Math.abs(pt.x - anchor.x), d: Math.abs(pt.y - anchor.y),
-      });
+      if (placing.current.item === "planting") {
+        setPlacePreview({ item: "planting", cx: pt.x, cy: pt.y, w: BUSHES[placing.current.kind].spread });
+      } else {
+        const { anchor } = placing.current;
+        setPlacePreview({
+          item: "feature",
+          x: Math.min(anchor.x, pt.x), y: Math.min(anchor.y, pt.y),
+          w: Math.abs(pt.x - anchor.x), d: Math.abs(pt.y - anchor.y),
+        });
+      }
       return;
     }
     if (tool === "measure") {
@@ -2149,6 +2158,16 @@ function YardTab({
       placing.current = null;
       setPlacingKind(null);
       setPlacePreview(null);
+      if (info.item === "planting") {
+        // A bush's spread is a fixed, species-given number — dragging
+        // repositions it, it doesn't resize it. Drop it centered on
+        // wherever the pointer was released.
+        const w = BUSHES[info.kind].spread;
+        const x = Math.min(Math.max(-w / 2, info.point.x - w / 2), yard.w - w / 2);
+        const y = Math.min(Math.max(-w / 2, info.point.y - w / 2), yard.d - w / 2);
+        addPlanting(info.kind, { x, y });
+        return;
+      }
       const k = FEATURE_KINDS[info.kind];
       const dw = Math.abs(info.point.x - info.anchor.x);
       const dd = Math.abs(info.point.y - info.anchor.y);
@@ -2166,7 +2185,7 @@ function YardTab({
     };
     window.addEventListener("pointerup", up);
     return () => window.removeEventListener("pointerup", up);
-  }, [addFeature]);
+  }, [addFeature, addPlanting, yard]);
 
   const sel = beds.find((b) => b.id === activeBed);
   const rects = beds.map((b) => ({ id: b.id, name: b.name, ...bedFootprint(b), x: b.x, y: b.y }));
@@ -2279,7 +2298,9 @@ function YardTab({
         {placingKind && (
           <div className="orto-tapebar">
             <span className="orto-tapehint">
-              Placing {FEATURE_KINDS[placingKind].label} — click to drop it at the default size, or click and drag to size it yourself.
+              {placingKind.item === "planting"
+                ? `Placing ${BUSHES[placingKind.kind].label} — drag to where you want it and let go.`
+                : `Placing ${FEATURE_KINDS[placingKind.kind].label} — click to drop it at the default size, or click and drag to size it yourself.`}
             </span>
             <div className="orto-bedtools mono">
               <button onClick={() => setPlacingKind(null)}>Cancel</button>
@@ -2297,7 +2318,7 @@ function YardTab({
         {palette && palette !== "fruit" && (
           <div className="orto-palettedrawer">
             {Object.entries(FEATURE_KINDS).filter(([, v]) => v.cat === palette).map(([k, v]) => (
-              <button key={k} onClick={() => { setPlacingKind(k); setPalette(null); setTool("select"); setTape([]); setGhost(null); }}>
+              <button key={k} onClick={() => { setPlacingKind({ item: "feature", kind: k }); setPalette(null); setTool("select"); setTape([]); setGhost(null); }}>
                 <span className="orto-swatch" style={{ background: v.fill }} />
                 {v.label}
                 <i className="mono">{v.w}×{v.d}</i>
@@ -2315,7 +2336,7 @@ function YardTab({
                 <div key={g} className="orto-fruitgroup">
                   <p className="orto-famlabel" style={{ color: "var(--berry)" }}>{g}</p>
                   {list.map(([k, v]) => (
-                    <button key={k} onClick={() => { addPlanting(k); setPalette(null); }}>
+                    <button key={k} onClick={() => { setPlacingKind({ item: "planting", kind: k }); setPalette(null); setTool("select"); setTape([]); setGhost(null); }}>
                       <span className="orto-swatch" style={{ background: "var(--berry)" }} />
                       {v.label}
                       <i className="mono">{v.spread} ft</i>
@@ -2457,9 +2478,9 @@ function YardTab({
               );
             })}
 
-            {/* pending feature placement */}
-            {placePreview && placingKind && (() => {
-              const pk = FEATURE_KINDS[placingKind];
+            {/* pending placement */}
+            {placePreview?.item === "feature" && (() => {
+              const pk = FEATURE_KINDS[placingKind.kind];
               const fill = pk.fill ?? "#999";
               const w = Math.max(placePreview.w, 0.15), d = Math.max(placePreview.d, 0.15);
               return (
@@ -2468,6 +2489,11 @@ function YardTab({
                   strokeDasharray="4 3" pointerEvents="none" />
               );
             })()}
+            {placePreview?.item === "planting" && (
+              <circle cx={px(placePreview.cx)} cy={px(placePreview.cy)} r={(placePreview.w / 2) * SCALE}
+                fill="var(--berry)" opacity="0.22" stroke="var(--berry)" strokeWidth="1.5"
+                strokeDasharray="4 3" pointerEvents="none" />
+            )}
 
             {/* perennial fruit */}
             {plantings.map((p) => {
