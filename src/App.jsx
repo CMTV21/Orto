@@ -452,7 +452,38 @@ function bedWallRuns(w, l, mask) {
 /* Shape presets: a couple of plain numbers stand in for a hand-drawn
    polygon. Both describe a base/legs made of whole-foot squares so they
    drop straight onto the planting grid with no fractional cells. */
+/* Rotates a w×l mask 90° clockwise into an l×w mask. */
+function rotateMask90(w, l, mask) {
+  const nw = l, nl = w;
+  const out = Array(nw * nl).fill(false);
+  for (let y = 0; y < l; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y * w + x]) continue;
+      const nx = l - 1 - y, ny = x;
+      out[ny * nw + nx] = true;
+    }
+  }
+  return out;
+}
+
+/* Same rotation, but for a planting-cells array (crop id strings or null)
+   instead of a boolean mask, so what's already planted turns with the bed. */
+function rotateCells90(w, l, cells) {
+  const nw = l, nl = w;
+  const out = Array(nw * nl).fill(null);
+  for (let y = 0; y < l; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = cells[y * w + x];
+      if (v == null) continue;
+      const nx = l - 1 - y, ny = x;
+      out[ny * nw + nx] = v;
+    }
+  }
+  return out;
+}
+
 function shapeToBed(shape, p) {
+  let result;
   if (shape === "l") {
     const w = Math.min(Math.max(2, Math.round(p.outerW) || 2), 20);
     const l = Math.min(Math.max(2, Math.round(p.outerL) || 2), 30);
@@ -461,9 +492,8 @@ function shapeToBed(shape, p) {
     for (let r = 0; r < l; r++) for (let c = 0; c < w; c++) {
       if (c < leg || r < leg) mask[r * w + c] = true;
     }
-    return { w, l, mask };
-  }
-  if (shape === "u") {
+    result = { w, l, mask };
+  } else if (shape === "u") {
     const w = Math.min(Math.max(3, Math.round(p.outerW) || 3), 20);
     const baseDepth = Math.min(Math.max(1, Math.round(p.baseDepth) || 1), 20);
     const armLength = Math.min(Math.max(1, Math.round(p.armLength) || 1), 25);
@@ -475,9 +505,17 @@ function shapeToBed(shape, p) {
       const inArm = r >= baseDepth && (c < armWidth || c >= w - armWidth);
       if (inBase || inArm) mask[r * w + c] = true;
     }
-    return { w, l, mask };
+    result = { w, l, mask };
+  } else {
+    return null;
   }
-  return null;
+  // The numeric fields always describe the shape in its base (0°) orientation;
+  // `rot` is applied on top so editing dimensions later doesn't undo a turn.
+  const steps = ((Math.round((p.rot ?? 0) / 90) % 4) + 4) % 4;
+  for (let i = 0; i < steps; i++) {
+    result = { w: result.l, l: result.w, mask: rotateMask90(result.w, result.l, result.mask) };
+  }
+  return result;
 }
 
 /* Shortest distance from a point to a line segment, in the same units as the points. */
@@ -1198,7 +1236,28 @@ export default function GardenPlanner() {
   };
 
   const moveBed = (id, x, y) => setState((s) => ({ ...s, beds: s.beds.map((b) => (b.id === id ? { ...b, x, y } : b)) }));
-  const rotateBed = (id) => setState((s) => ({ ...s, beds: s.beds.map((b) => (b.id === id ? { ...b, rot: b.rot === 90 ? 0 : 90 } : b)) }));
+  const rotateBed = (id) => setState((s) => {
+    const bed = s.beds.find((b) => b.id === id);
+    if (!bed) return s;
+    if (!bed.mask) {
+      return { ...s, beds: s.beds.map((b) => (b.id === id ? { ...b, rot: b.rot === 90 ? 0 : 90 } : b)) };
+    }
+    // A shaped bed's rotation is baked straight into its own w/l/mask (see
+    // shapeToBed) rather than a rot flag, since a rotated L or U isn't just
+    // its bounding box turned sideways — the shape itself turns. Whatever
+    // was already planted has to turn with it, or the squares scramble.
+    const shapeParams = { ...(bed.shapeParams || {}), rot: ((bed.shapeParams?.rot ?? 0) + 90) % 360 };
+    const next = shapeToBed(bed.shape, shapeParams);
+    const x = Math.min(Math.max(0, bed.x), Math.max(0, s.yard.w - next.w));
+    const y = Math.min(Math.max(0, bed.y), Math.max(0, s.yard.d - next.l));
+    const beds = s.beds.map((b) => (b.id === id ? { ...b, w: next.w, l: next.l, mask: next.mask, shapeParams, x, y } : b));
+    const plans = { ...s.plans };
+    Object.keys(plans).forEach((yr) => {
+      const cells = plans[yr][id];
+      if (cells) plans[yr] = { ...plans[yr], [id]: rotateCells90(bed.w, bed.l, cells) };
+    });
+    return { ...s, beds, plans };
+  });
   const setYard = (patch) => setState((s) => ({ ...s, yard: { ...s.yard, ...patch } }));
   const setEdge = (side, kind) => setState((s) => ({ ...s, yard: { ...s.yard, edges: { ...s.yard.edges, [side]: kind } } }));
   const moveFeature = (id, x, y) => setState((s) => ({ ...s, features: s.features.map((f) => (f.id === id ? { ...f, x, y } : f)) }));
@@ -2483,11 +2542,10 @@ function YardTab({
             <h2 className="orto-h2">{sel.name}</h2>
             <p className="orto-fine">{sel.w} ft × {sel.l} ft · sitting at {ftIn(sel.x)} across, {ftIn(sel.y)} down</p>
             <div className="orto-bedtools mono" style={{ marginTop: 8 }}>
-              {!sel.mask && <button onClick={() => rotateBed(sel.id)}>Turn {sel.rot === 90 ? "lengthways" : "sideways"}</button>}
+              <button onClick={() => rotateBed(sel.id)}>{sel.mask ? "Turn 90°" : `Turn ${sel.rot === 90 ? "lengthways" : "sideways"}`}</button>
               <button onClick={() => duplicateBed(sel.id)}>Duplicate</button>
               <button onClick={openPlot}>Plant this bed</button>
             </div>
-            {sel.mask && <p className="orto-fine">Shaped beds don't rotate yet — build them facing the way you want.</p>}
 
             <p className="mono orto-dates">
               Diagonal {ftIn(Math.hypot(sel.w, sel.l))} — both should read the same when the frame is square.
@@ -4136,7 +4194,7 @@ function CustomCropForm({ onAdd, onCancel }) {
   );
 }
 
-const DEFAULT_SHAPE_PARAMS = { outerW: 8, outerL: 8, legWidth: 3, baseDepth: 2, armWidth: 3, armLength: 5 };
+const DEFAULT_SHAPE_PARAMS = { outerW: 8, outerL: 8, legWidth: 3, baseDepth: 2, armWidth: 3, armLength: 5, rot: 0 };
 
 /* The handful of numbers each shape preset needs, shared between adding a
    new bed and editing an existing shaped one. */
