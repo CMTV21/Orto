@@ -1913,7 +1913,7 @@ export default function GardenPlanner() {
 
 const SCALE = 22;   // px per foot in viewBox units
 const PAD = 46;
-const snapFt = (v) => Math.round(v * 2) / 2;
+const snapFt = (v) => Math.round(v * 12) / 12; // nearest inch, not nearest half-foot
 
 function YardTab({
   yard, beds, features, plantings, addPlanting, updatePlanting, removePlanting, movePlanting,
