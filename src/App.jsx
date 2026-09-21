@@ -2419,22 +2419,40 @@ function YardTab({
                   {k.shape === "circle" ? (
                     <circle cx={cx} cy={cy} r={(f.w / 2) * SCALE} fill={fill} opacity="0.22"
                       stroke={fill} strokeWidth={isSel ? 2.4 : 1} strokeDasharray={f.kind === "tree" ? "4 3" : undefined} />
-                  ) : k.shape === "line" ? (
-                    <>
-                      <line x1={px(f.x)} y1={cy} x2={px(f.x + f.w)} y2={cy}
-                        stroke={fill} strokeWidth={isSel ? 3.5 : 2.5} />
-                      {Array.from({ length: Math.floor(f.w / 4) + 1 }).map((_, i) => (
-                        <circle key={i} cx={px(f.x + Math.min(i * 4, f.w))} cy={cy} r="2.5" fill={fill} />
-                      ))}
-                    </>
-                  ) : (
+                  ) : k.shape === "line" ? (() => {
+                    // Orientation follows whichever dimension the bed was
+                    // actually drawn along, not just width — a fence dragged
+                    // top-to-bottom is taller than it is wide.
+                    const vertical = f.d > f.w;
+                    const len = vertical ? f.d : f.w;
+                    const dotAt = (i) => Math.min(i * 4, len);
+                    return (
+                      <>
+                        <line
+                          x1={vertical ? cx : px(f.x)} y1={vertical ? px(f.y) : cy}
+                          x2={vertical ? cx : px(f.x + f.w)} y2={vertical ? px(f.y + f.d) : cy}
+                          stroke={fill} strokeWidth={isSel ? 3.5 : 2.5} />
+                        {Array.from({ length: Math.floor(len / 4) + 1 }).map((_, i) => (
+                          <circle key={i}
+                            cx={vertical ? cx : px(f.x + dotAt(i))}
+                            cy={vertical ? px(f.y + dotAt(i)) : cy}
+                            r="2.5" fill={fill} />
+                        ))}
+                      </>
+                    );
+                  })() : (
                     <rect x={px(f.x)} y={px(f.y)} width={f.w * SCALE} height={f.d * SCALE} rx="2"
                       fill={k.hatch ? "url(#ortoHouse)" : fill} opacity={k.hatch ? 0.5 : 0.22}
                       stroke={fill} strokeWidth={isSel ? 2.4 : 1} />
                   )}
                   {f.kind === "tree" && <circle cx={cx} cy={cy} r="4" fill="var(--soil)" />}
-                  <text x={cx} y={cy + (k.shape === "line" ? -6 : 4)} textAnchor="middle" fontSize="10"
-                    className="svg-mono" fill="var(--ink-soft)" pointerEvents="none">{f.name}</text>
+                  {k.shape === "line" && f.d > f.w ? (
+                    <text x={cx + 10} y={cy} textAnchor="start" dominantBaseline="middle" fontSize="10"
+                      className="svg-mono" fill="var(--ink-soft)" pointerEvents="none">{f.name}</text>
+                  ) : (
+                    <text x={cx} y={cy + (k.shape === "line" ? -6 : 4)} textAnchor="middle" fontSize="10"
+                      className="svg-mono" fill="var(--ink-soft)" pointerEvents="none">{f.name}</text>
+                  )}
                 </g>
               );
             })}
