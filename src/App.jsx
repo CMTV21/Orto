@@ -210,6 +210,14 @@ const CROPS = [
 
 const CROP_BY_ID = Object.fromEntries(CROPS.map((c) => [c.id, c]));
 
+/* Buckets the free-text `sun` field into a filterable category. */
+function sunCategory(sun) {
+  const s = (sun || "").toLowerCase().trim();
+  if (s === "part shade") return "shade";
+  if (s.includes("part")) return "flexible";
+  return "full";
+}
+
 /* Custom crops get folded into the same CROPS/CROP_BY_ID every part of the
    app already reads from — this is the one place that happens, so a crop
    added by the person works everywhere immediately: palette, seed box,
@@ -931,6 +939,23 @@ function cropSchedule(crop, lastFrost, firstFrost) {
   return out;
 }
 
+/* Which of "indoors" / "plant" / "harvest" apply to a crop in a given
+   calendar month, for the Plot tab's month scrubber. */
+function cropActionsInMonth(crop, month, lastFrost, firstFrost) {
+  const s = cropSchedule(crop, lastFrost, firstFrost);
+  const actions = [];
+  if (s.indoors && s.indoors.getMonth() === month) actions.push("indoors");
+  if ((s.sow && s.sow.getMonth() === month) || (s.setOut && s.setOut.getMonth() === month) || s.successions.some((d) => d.getMonth() === month)) {
+    actions.push("plant");
+  }
+  if (s.harvestStart && s.harvestEnd) {
+    const y = s.harvestStart.getFullYear();
+    const mStart = new Date(y, month, 1), mEnd = new Date(y, month + 1, 0, 23, 59, 59);
+    if (s.harvestStart <= mEnd && s.harvestEnd >= mStart) actions.push("harvest");
+  }
+  return actions;
+}
+
 /* ---------- storage ---------- */
 const LEGACY_KEY = "orto-garden-v1";       // the old single-garden save
 const INDEX_KEY = "orto-designs-index";     // [{id, name, updatedAt, createdAt}]
@@ -1103,6 +1128,9 @@ export default function GardenPlanner() {
   const [activeBed, setActiveBed] = useState("b1");
   const [brush, setBrush] = useState("tomato");
   const [search, setSearch] = useState("");
+  const [sunFilter, setSunFilter] = useState(null);
+  const [hardyFilter, setHardyFilter] = useState(null);
+  const [scrubMonth, setScrubMonth] = useState(null);
   const [showBedForm, setShowBedForm] = useState(false);
   const [openCropInfo, setOpenCropInfo] = useState(null);
   const [showCropForm, setShowCropForm] = useState(false);
@@ -1556,8 +1584,13 @@ export default function GardenPlanner() {
 
   const filteredCrops = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return CROPS.filter((c) => !q || c.name.toLowerCase().includes(q));
-  }, [search, state?.customCrops]);
+    return CROPS.filter((c) =>
+      (!q || c.name.toLowerCase().includes(q)) &&
+      (!sunFilter || sunCategory(c.sun) === sunFilter) &&
+      (!hardyFilter || c.tender === hardyFilter) &&
+      (scrubMonth == null || cropActionsInMonth(c, scrubMonth, lastFrost, firstFrost).length > 0)
+    );
+  }, [search, sunFilter, hardyFilter, scrubMonth, frost.last, frost.first, state?.customCrops]);
 
   const years = useMemo(() => {
     const ys = new Set(Object.keys(state?.plans ?? {}).map(Number));
@@ -1684,6 +1717,39 @@ export default function GardenPlanner() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              <div className="orto-palfilters mono">
+                <span className="orto-palfilters-label">Sun</span>
+                {[["full", "Full sun"], ["flexible", "Full/part"], ["shade", "Part shade"]].map(([k, label]) => (
+                  <button key={k} type="button"
+                    className={"orto-filterchip " + (sunFilter === k ? "on" : "")}
+                    onClick={() => setSunFilter(sunFilter === k ? null : k)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="orto-palfilters mono">
+                <span className="orto-palfilters-label">Hardiness</span>
+                {[["hardy", "Hardy"], ["half-hardy", "Half-hardy"], ["tender", "Tender"]].map(([k, label]) => (
+                  <button key={k} type="button"
+                    className={"orto-filterchip " + (hardyFilter === k ? "on" : "")}
+                    onClick={() => setHardyFilter(hardyFilter === k ? null : k)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="orto-scrubber mono">
+                <button type="button" className={"orto-filterchip " + (scrubMonth == null ? "on" : "")} onClick={() => setScrubMonth(null)}>All</button>
+                {MONTHS.map((m, i) => (
+                  <button key={m} type="button"
+                    className={"orto-filterchip " + (scrubMonth === i ? "on" : "")}
+                    onClick={() => setScrubMonth(scrubMonth === i ? null : i)}>
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {scrubMonth != null && (
+                <p className="orto-fine">What has sowing, transplanting, or harvesting due in {MONTHS[scrubMonth]}.</p>
+              )}
               <button className="orto-erase" style={{ borderStyle: "dashed" }} onClick={() => setShowCropForm((v) => !v)}>
                 {showCropForm ? "Cancel" : "+ Add a crop not on the list"}
               </button>
@@ -1700,6 +1766,9 @@ export default function GardenPlanner() {
                 Clear squares
               </button>
               <div className="orto-palette-scroll">
+                {!filteredCrops.length && (
+                  <p className="orto-empty">No crops match those filters.</p>
+                )}
                 {Object.keys(FAMILY).map((famKey) => {
                   const list = filteredCrops.filter((c) => c.fam === famKey);
                   if (!list.length) return null;
@@ -1718,6 +1787,16 @@ export default function GardenPlanner() {
                             >
                               <span className="orto-swatch" style={{ background: FAMILY[c.fam].color }} />
                               <span className="orto-chip-name">{c.name}</span>
+                              {scrubMonth != null && (
+                                <span className="orto-actbadges">
+                                  {cropActionsInMonth(c, scrubMonth, lastFrost, firstFrost).map((a) => (
+                                    <span key={a} className={"orto-actbadge " + a}
+                                      title={a === "indoors" ? "Start indoors this month" : a === "plant" ? "Sow or transplant this month" : "Harvest window this month"}>
+                                      {a === "indoors" ? "I" : a === "plant" ? "S" : "H"}
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
                               <span className="mono orto-chip-n">{c.perSqFt >= 1 ? c.perSqFt : `1/${Math.round(1 / c.perSqFt)}`}</span>
                             </button>
                             <button
@@ -4811,6 +4890,18 @@ function Styles() {
 /* palette */
 .orto-palette{display:flex; flex-direction:column; gap:8px; max-height:78vh;}
 .orto-palette-scroll{overflow-y:auto; padding-right:2px; flex:1; min-height:180px;}
+.orto-palfilters{display:flex; align-items:center; gap:5px; flex-wrap:wrap; font-size:10px;}
+.orto-palfilters-label{color:var(--ink-soft); letter-spacing:0.07em; text-transform:uppercase; margin-right:2px;}
+.orto-filterchip{background:transparent; border:1px solid var(--rule); border-radius:12px; padding:2px 8px; font-size:10.5px; color:var(--ink-soft); cursor:pointer;}
+.orto-filterchip:hover{border-color:var(--ink);}
+.orto-filterchip.on{background:var(--olive); border-color:var(--olive); color:var(--paper);}
+.orto-scrubber{display:flex; align-items:center; gap:4px; flex-wrap:wrap;}
+.orto-scrubber .orto-filterchip{padding:2px 6px;}
+.orto-actbadges{display:inline-flex; gap:2px; margin-left:4px;}
+.orto-actbadge{display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:3px; font-size:9px; font-weight:700; color:var(--paper);}
+.orto-actbadge.indoors{background:var(--chicory);}
+.orto-actbadge.plant{background:var(--olive);}
+.orto-actbadge.harvest{background:var(--pomodoro);}
 .orto-famgroup{margin-bottom:10px;}
 .orto-famlabel{font-size:10px; letter-spacing:0.1em; text-transform:uppercase; margin:0 0 4px; font-weight:600;}
 .orto-chip{display:flex; align-items:center; gap:7px; width:100%; text-align:left; background:transparent; border:1px solid transparent; border-radius:6px; padding:3px 5px; font-size:12.5px; color:var(--ink);}
