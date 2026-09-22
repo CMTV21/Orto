@@ -1,11 +1,14 @@
 /* Address -> garden location lookup.
-   Geocodes with Open-Meteo's free geocoding API, then derives an
-   approximate USDA hardiness zone and average frost dates from ~10 years
-   of historical daily lows via Open-Meteo's archive API. Both are public,
-   keyless, CORS-enabled endpoints meant for direct client-side use, so
-   this all runs from the browser with no backend involved. */
+   Geocodes with OpenStreetMap's free Nominatim search — unlike a places-only
+   geocoder, it understands full street addresses as well as city names — then
+   derives an approximate USDA hardiness zone and average frost dates from
+   ~10 years of historical daily lows via Open-Meteo's archive API. Both are
+   public, keyless endpoints usable directly from the browser, so this all
+   runs client-side with no backend involved. Nominatim's usage policy asks
+   for attribution wherever a lookup it returned is shown — see the "OSM"
+   credit next to the location picker in App.jsx. */
 
-const GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search";
+const GEOCODE_URL = "https://nominatim.openstreetmap.org/search";
 const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
 const HISTORY_YEARS = 10;
 const FROST_F = 32;
@@ -70,35 +73,33 @@ export function computeFrostAndZone(dates, mins) {
   return { avgLastFrost, avgFirstFrost, zone };
 }
 
-/* The geocoder matches on a place's own name, not "city, region" combined —
-   so "Hamilton, Ontario" or "hamilton ontario" needs to be tried as just
-   "Hamilton" once the full string comes back empty. Whatever trailing part
-   got stripped off becomes a hint for picking the right one of several
-   same-named places back. */
+/* A full street address geocodes to a precise point, but showing that exact
+   address as the plan's subtitle would put someone's home address on screen
+   any time they share it — so the label is always built at city level,
+   independent of how precise the typed query was. Falls back through
+   looser address fields for a rural query that has no city proper. */
+function cityLevelLabel(addr, fallback) {
+  const place = addr.city || addr.town || addr.village || addr.hamlet || addr.municipality || addr.county;
+  const region = addr.state || addr.region || addr.province;
+  const label = [place, region, addr.country].filter(Boolean).join(", ");
+  return label || fallback;
+}
+
+/* If the full query comes back empty (a typo'd house number, an
+   over-specific address), retry with the string before the first comma —
+   Nominatim's own parser otherwise already handles "city, region" and
+   "city region" forms, and full street addresses, natively. */
 function queryCandidates(raw) {
   const q = raw.trim();
   const candidates = [q];
-  if (q.includes(",")) {
-    candidates.push(q.split(",")[0].trim());
-  } else {
-    const words = q.split(/\s+/);
-    if (words.length > 1) candidates.push(words.slice(0, -1).join(" "));
-  }
+  if (q.includes(",")) candidates.push(q.split(",")[0].trim());
   return [...new Set(candidates.filter(Boolean))];
 }
 
-function regionHint(raw) {
-  const q = raw.trim();
-  if (q.includes(",")) return q.split(",").slice(1).join(",").trim().toLowerCase();
-  const words = q.split(/\s+/);
-  return words.length > 1 ? words[words.length - 1].toLowerCase() : "";
-}
-
 export async function geocodeAddress(query) {
-  const hint = regionHint(query);
   let hits = [];
   for (const candidate of queryCandidates(query)) {
-    const url = `${GEOCODE_URL}?name=${encodeURIComponent(candidate)}&count=5&language=en&format=json`;
+    const url = `${GEOCODE_URL}?q=${encodeURIComponent(candidate)}&format=jsonv2&addressdetails=1&limit=5`;
     let res;
     try {
       res = await fetch(url);
@@ -107,22 +108,14 @@ export async function geocodeAddress(query) {
     }
     if (!res.ok) continue;
     const data = await res.json();
-    if (data.results?.length) { hits = data.results; break; }
+    if (data.length) { hits = data; break; }
   }
-  if (!hits.length) throw new Error(`Couldn't find "${query}" — try a nearby city name instead.`);
+  if (!hits.length) throw new Error(`Couldn't find "${query}" — try a nearby city name or a fuller address instead.`);
 
-  let hit = hits[0];
-  if (hint) {
-    const better = hits.find((h) =>
-      [h.admin1, h.country, h.country_code].filter(Boolean).some((v) => {
-        const vl = v.toLowerCase();
-        return vl.includes(hint) || hint.includes(vl);
-      })
-    );
-    if (better) hit = better;
-  }
-  const label = [hit.name, hit.admin1, hit.country].filter(Boolean).join(", ");
-  return { label, lat: hit.latitude, lon: hit.longitude };
+  const hit = hits[0];
+  const addr = hit.address || {};
+  const label = cityLevelLabel(addr, hit.display_name.split(",").slice(0, 3).join(", "));
+  return { label, lat: Number(hit.lat), lon: Number(hit.lon) };
 }
 
 export async function fetchFrostAndZone(lat, lon) {

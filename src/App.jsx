@@ -3253,6 +3253,7 @@ function LocationField({ location, onChange }) {
             Sets your hardiness zone and average frost dates from ~10 years of local weather
             history — this replaces any frost dates you've fine-tuned by hand.
           </p>
+          <p className="orto-fine">Location search © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors.</p>
         </form>
       )}
     </span>
