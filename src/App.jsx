@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { lookupLocation } from "./location";
 
 /* ============================================================
    ORTO — a kitchen garden planner
@@ -1003,6 +1004,7 @@ function makeBlankState() {
     taskDone: {},
     build: { board: "2x6", material: "cedar", posts: true, fabric: true, ppf: MATERIALS.cedar.ppf },
     frost: {},
+    location: null,
   };
 }
 
@@ -1017,6 +1019,7 @@ function migrate(s) {
   next.build = { board: "2x6", material: "cedar", posts: true, fabric: true, ppf: MATERIALS.cedar.ppf, ...(s.build || {}) };
   next.customCrops = s.customCrops ?? [];
   next.taskDone = s.taskDone ?? {};
+  next.location = s.location ?? null;
   let cursorX = 1, cursorY = 1, rowDeep = 0;
   next.beds = (s.beds || []).map((b) => {
     if (typeof b.x === "number" && typeof b.y === "number") {
@@ -1033,7 +1036,11 @@ function migrate(s) {
   return next;
 }
 
-const defaultFrost = (year) => ({ last: `${year}-05-08`, first: `${year}-10-10` });
+const DEFAULT_LOCATION = { label: "Hamilton, Ontario, Canada", zone: "6b", avgLastFrost: "05-08", avgFirstFrost: "10-10" };
+const defaultFrost = (year, location) => {
+  const loc = location ?? DEFAULT_LOCATION;
+  return { last: `${year}-${loc.avgLastFrost ?? "05-08"}`, first: `${year}-${loc.avgFirstFrost ?? "10-10"}` };
+};
 
 /* ============================================================ */
 
@@ -1165,7 +1172,8 @@ export default function GardenPlanner() {
   const beds = state?.beds ?? [];
   const yard = state?.yard ?? DEFAULT_YARD;
   const plan = state?.plans?.[year] ?? {};
-  const frost = state?.frost?.[year] ?? defaultFrost(year);
+  const location = state?.location ?? DEFAULT_LOCATION;
+  const frost = state?.frost?.[year] ?? defaultFrost(year, location);
   const lastFrost = fromISO(frost.last);
   const firstFrost = fromISO(frost.first);
   const prevPlan = state?.plans?.[year - 1] ?? {};
@@ -1455,7 +1463,14 @@ export default function GardenPlanner() {
   };
 
   const setFrost = (which, value) => {
-    setState((s) => ({ ...s, frost: { ...s.frost, [year]: { ...(s.frost[year] ?? defaultFrost(year)), [which]: value } } }));
+    setState((s) => ({ ...s, frost: { ...s.frost, [year]: { ...(s.frost[year] ?? defaultFrost(year, location)), [which]: value } } }));
+  };
+
+  /* Changing location resets any per-year frost overrides — they were
+     tuned to the old spot, and the whole point of looking up a new one is
+     that those dates no longer apply. */
+  const setLocation = (loc) => {
+    setState((s) => ({ ...s, location: loc, frost: {} }));
   };
 
   /* --- derived --- */
@@ -1594,7 +1609,9 @@ export default function GardenPlanner() {
                 onClose={() => setShowDesigns(false)}
               />
             )}
-            <p className="orto-sub">Kitchen garden plan · Hamilton, zone 6b</p>
+            <p className="orto-sub">
+              Kitchen garden plan · {location.label}{location.zone ? `, zone ${location.zone}` : ""}
+            </p>
           </div>
           <div className="orto-head-meta mono">
             <label className="orto-year">
@@ -1861,6 +1878,8 @@ export default function GardenPlanner() {
             gardenTally={gardenTally}
             frost={frost}
             setFrost={setFrost}
+            location={location}
+            setLocation={setLocation}
             year={year}
             lastFrost={lastFrost}
             firstFrost={firstFrost}
@@ -2870,7 +2889,7 @@ function YardTab({
    Season tab — the ribbon
    ============================================================ */
 
-function SeasonTab({ schedules, plantings, gardenTally, frost, setFrost, year, lastFrost, firstFrost, taskDone, toggleTaskDone }) {
+function SeasonTab({ schedules, plantings, gardenTally, frost, setFrost, location, setLocation, year, lastFrost, firstFrost, taskDone, toggleTaskDone }) {
   const START = new Date(year, 1, 1);   // Feb 1
   const END = new Date(year, 10, 30);   // Nov 30
   const SPAN = (END - START) / MS_DAY;
@@ -2926,20 +2945,14 @@ function SeasonTab({ schedules, plantings, gardenTally, frost, setFrost, year, l
     return m;
   }, [tasks]);
 
-  if (!schedules.length && !fruitRows.length) {
-    return (
-      <div className="orto-panel orto-solo">
-        <h2 className="orto-h2">Nothing scheduled yet</h2>
-        <p className="orto-empty">Plant something in the Plot tab and the season builds itself from there.</p>
-      </div>
-    );
-  }
+  const hasSchedule = schedules.length > 0 || fruitRows.length > 0;
 
   return (
     <div className="orto-season">
       <div className="orto-panel">
         <div className="orto-frostbar">
           <h2 className="orto-h2">Season {year}</h2>
+          <LocationField location={location} onChange={setLocation} />
           <label className="mono">Last spring frost
             <input type="date" value={frost.last} onChange={(e) => setFrost("last", e.target.value)} />
           </label>
@@ -2959,6 +2972,10 @@ function SeasonTab({ schedules, plantings, gardenTally, frost, setFrost, year, l
           Google Calendar, or Outlook and it'll set reminders on its own.
         </p>
 
+        {!hasSchedule ? (
+          <p className="orto-empty">Plant something in the Plot tab and the season builds itself from there.</p>
+        ) : (
+        <>
         <div className="orto-ribbonscroll">
           <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: 720 }} role="img" aria-label="Planting and harvest timeline">
             {monthTicks.map((d, i) => (
@@ -3034,8 +3051,11 @@ function SeasonTab({ schedules, plantings, gardenTally, frost, setFrost, year, l
           <span><i className="lg lg-d" /> sowing date</span>
           <span className="orto-fine">Number beside each name is total plants across all beds.</span>
         </div>
+        </>
+        )}
       </div>
 
+      {hasSchedule && (
       <div className="orto-panel">
         <div className="orto-bedhead">
           <h2 className="orto-h2">What to do, month by month</h2>
@@ -3068,7 +3088,62 @@ function SeasonTab({ schedules, plantings, gardenTally, frost, setFrost, year, l
           );
         })}
       </div>
+      )}
     </div>
+  );
+}
+
+/* Address -> zone/frost lookup, inline in the Season frostbar. */
+function LocationField({ location, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e) {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await lookupLocation(q);
+      onChange(result);
+      setOpen(false);
+      setQuery("");
+    } catch (err) {
+      setError(err.message || "Couldn't look that up.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="orto-locfield mono">
+      📍 {location.label}{location.zone ? ` · zone ${location.zone}` : ""}
+      <button type="button" className="orto-linkbtn" onClick={() => { setOpen((v) => !v); setError(""); }}>
+        {open ? "cancel" : "change"}
+      </button>
+      {open && (
+        <form className="orto-locpop" onSubmit={submit}>
+          <input
+            className="orto-input"
+            autoFocus
+            placeholder="City, region, or address"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="orto-bedtools mono">
+            <button type="submit" disabled={busy || !query.trim()}>{busy ? "Looking up…" : "Look up"}</button>
+          </div>
+          {error && <p className="orto-fine" style={{ color: "var(--pomodoro)" }}>{error}</p>}
+          <p className="orto-fine">
+            Sets your hardiness zone and average frost dates from ~10 years of local weather
+            history — this replaces any frost dates you've fine-tuned by hand.
+          </p>
+        </form>
+      )}
+    </span>
   );
 }
 
@@ -4804,6 +4879,8 @@ function Styles() {
 .orto-calbtn{border:1px solid var(--olive); border-radius:6px; padding:4px 10px; font-size:11px; color:var(--olive); background:transparent;}
 .orto-calbtn:hover:not(:disabled){background:var(--olive); color:var(--paper);}
 .orto-calbtn:disabled{opacity:.4; cursor:not-allowed;}
+.orto-locfield{position:relative; display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-soft);}
+.orto-locpop{position:absolute; top:100%; left:0; z-index:30; margin-top:6px; background:var(--paper); border:1px solid var(--ink); border-radius:8px; padding:12px; width:280px; box-shadow:0 8px 24px rgba(30,36,27,.16); display:flex; flex-direction:column; gap:8px;}
 .orto-caladd{margin-left:auto; flex:none; background:transparent; border:1px solid var(--rule); border-radius:6px; padding:1px 6px; font-size:9.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; opacity:0;}
 .orto-task:hover .orto-caladd{opacity:1;}
 .orto-caladd:hover{border-color:var(--olive); color:var(--olive);}
