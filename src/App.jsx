@@ -2493,6 +2493,36 @@ function YardTab({
             <rect x={PAD} y={PAD} width={yard.w * SCALE} height={yard.d * SCALE} fill="#EFF2E7" />
             <rect x={PAD} y={PAD} width={yard.w * SCALE} height={yard.d * SCALE} fill="url(#ortoGrid)" />
 
+            {/* ruled edges — a foot mark every ft, a labelled one every 5 */}
+            <g className="orto-ruler">
+              {Array.from({ length: Math.floor(yard.w) + 1 }).map((_, i) => {
+                const gx = PAD + i * SCALE;
+                const major = i % 5 === 0;
+                return (
+                  <g key={"rx" + i}>
+                    <line x1={gx} y1={PAD - (major ? 9 : 4)} x2={gx} y2={PAD}
+                      stroke="var(--ink-soft)" strokeWidth="1" opacity={major ? 0.9 : 0.45} />
+                    {major && (
+                      <text x={gx} y={PAD - 12} textAnchor="middle" fontSize="9" className="svg-mono" fill="var(--ink-soft)">{i}</text>
+                    )}
+                  </g>
+                );
+              })}
+              {Array.from({ length: Math.floor(yard.d) + 1 }).map((_, i) => {
+                const gy = PAD + i * SCALE;
+                const major = i % 5 === 0;
+                return (
+                  <g key={"ry" + i}>
+                    <line x1={PAD - (major ? 9 : 4)} y1={gy} x2={PAD} y2={gy}
+                      stroke="var(--ink-soft)" strokeWidth="1" opacity={major ? 0.9 : 0.45} />
+                    {major && (
+                      <text x={PAD - 12} y={gy + 3} textAnchor="end" fontSize="9" className="svg-mono" fill="var(--ink-soft)">{i}</text>
+                    )}
+                  </g>
+                );
+              })}
+            </g>
+
             {/* boundaries */}
             {[
               ["north", PAD, PAD, yard.w * SCALE, 0],
