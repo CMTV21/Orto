@@ -70,18 +70,57 @@ export function computeFrostAndZone(dates, mins) {
   return { avgLastFrost, avgFirstFrost, zone };
 }
 
-export async function geocodeAddress(query) {
-  const url = `${GEOCODE_URL}?name=${encodeURIComponent(query)}&count=1&language=en&format=json`;
-  let res;
-  try {
-    res = await fetch(url);
-  } catch {
-    throw new Error("Couldn't reach the location lookup service — check your connection and try again.");
+/* The geocoder matches on a place's own name, not "city, region" combined —
+   so "Hamilton, Ontario" or "hamilton ontario" needs to be tried as just
+   "Hamilton" once the full string comes back empty. Whatever trailing part
+   got stripped off becomes a hint for picking the right one of several
+   same-named places back. */
+function queryCandidates(raw) {
+  const q = raw.trim();
+  const candidates = [q];
+  if (q.includes(",")) {
+    candidates.push(q.split(",")[0].trim());
+  } else {
+    const words = q.split(/\s+/);
+    if (words.length > 1) candidates.push(words.slice(0, -1).join(" "));
   }
-  if (!res.ok) throw new Error("Location lookup failed — try again in a moment.");
-  const data = await res.json();
-  const hit = data.results?.[0];
-  if (!hit) throw new Error(`Couldn't find "${query}" — try a nearby city name instead.`);
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function regionHint(raw) {
+  const q = raw.trim();
+  if (q.includes(",")) return q.split(",").slice(1).join(",").trim().toLowerCase();
+  const words = q.split(/\s+/);
+  return words.length > 1 ? words[words.length - 1].toLowerCase() : "";
+}
+
+export async function geocodeAddress(query) {
+  const hint = regionHint(query);
+  let hits = [];
+  for (const candidate of queryCandidates(query)) {
+    const url = `${GEOCODE_URL}?name=${encodeURIComponent(candidate)}&count=5&language=en&format=json`;
+    let res;
+    try {
+      res = await fetch(url);
+    } catch {
+      throw new Error("Couldn't reach the location lookup service — check your connection and try again.");
+    }
+    if (!res.ok) continue;
+    const data = await res.json();
+    if (data.results?.length) { hits = data.results; break; }
+  }
+  if (!hits.length) throw new Error(`Couldn't find "${query}" — try a nearby city name instead.`);
+
+  let hit = hits[0];
+  if (hint) {
+    const better = hits.find((h) =>
+      [h.admin1, h.country, h.country_code].filter(Boolean).some((v) => {
+        const vl = v.toLowerCase();
+        return vl.includes(hint) || hint.includes(vl);
+      })
+    );
+    if (better) hit = better;
+  }
   const label = [hit.name, hit.admin1, hit.country].filter(Boolean).join(", ");
   return { label, lat: hit.latitude, lon: hit.longitude };
 }

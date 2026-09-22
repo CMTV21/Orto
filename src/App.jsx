@@ -654,13 +654,16 @@ function sunHoursAt(point, obstructions, month, day, northAngleDeg, latDeg = HAM
       const shadowLen = o.height / Math.tan(altitude * rad);
       if (shadowLen <= 0 || shadowLen > 300) return false; // absurdly long low-angle shadows aren't useful signal
       const oWorld = planToWorld(o.x, o.y, northAngleDeg);
-      const tip = { east: oWorld.east + shadowDir.east * shadowLen, north: oWorld.north + shadowDir.north * shadowLen };
-      const dist = pointToSegment(
-        { x: pointWorld.east, y: pointWorld.north },
-        { x: oWorld.east, y: oWorld.north },
-        { x: tip.east, y: tip.north }
-      );
-      return dist < Math.max(o.width / 2, 1.5);
+      // Project onto the shadow direction rather than measuring raw distance
+      // to the cast segment — a point close to the obstruction itself but on
+      // the sun side (not the shadow side) must not count as shaded, which a
+      // plain point-to-segment distance wrongly did for anything within a
+      // couple feet of the obstruction, regardless of which way the shadow fell.
+      const dx = pointWorld.east - oWorld.east, dy = pointWorld.north - oWorld.north;
+      const along = dx * shadowDir.east + dy * shadowDir.north;
+      if (along < 0 || along > shadowLen) return false;
+      const perp = dx * shadowDir.north - dy * shadowDir.east;
+      return Math.abs(perp) < Math.max(o.width / 2, 1.5);
     });
     if (!shaded) litSteps++;
   }
