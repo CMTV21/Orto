@@ -4348,21 +4348,41 @@ function YardOverview({ yard, beds, features, plantings }) {
   const X = (x) => PAD + x * SCALE;
   const Y = (y) => PAD + y * SCALE;
   const edgeStyle = { fence: "#7A6A57", house: "#2b2b22", open: "#c8c2b0" };
-  const truncate = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+  // Wraps a bed name to fit its own drawn width instead of spilling into
+  // whatever sits next to it — word-wrapped at however many characters
+  // actually fit at this font size, not a fixed line length. Caps at 3
+  // lines; anything left over is folded into the last one with an ellipsis
+  // rather than growing the label past what the bed itself can show.
+  const wrapLabel = (name, boxW, fontSize) => {
+    const maxChars = Math.max(3, Math.floor((boxW - 4) / (fontSize * 0.58)));
+    const words = name.split(" ");
+    const lines = [];
+    let cur = "";
+    words.forEach((w) => {
+      const test = cur ? `${cur} ${w}` : w;
+      if (test.length > maxChars && cur) { lines.push(cur); cur = w; }
+      else cur = test;
+    });
+    if (cur) lines.push(cur);
+    if (lines.length > 3) {
+      const kept = lines.slice(0, 3);
+      kept[2] = kept[2].length > maxChars - 1 ? kept[2].slice(0, maxChars - 1) + "…" : kept[2] + "…";
+      return kept;
+    }
+    return lines;
+  };
   // A halo behind every label — the only defence against overlapping text
   // once beds or features sit close together, since nothing here can be
   // dragged apart the way the interactive Yard tab allows.
   const haloProps = { paintOrder: "stroke", stroke: "#EFF2E7", strokeWidth: 3, strokeLinejoin: "round" };
 
-  // Multiple narrow beds side by side (a row of strips along a fence, say)
-  // can't each fit a label without spilling into the next one — those get
-  // a plain numbered marker on the drawing and their names listed below it
-  // instead, rather than fighting for the same few pixels.
+  // A bed too small to hold even one wrapped word gets a plain numbered
+  // marker instead, with its name listed in a legend below the drawing.
   let tightNum = 0;
   const tightNumbers = new Map();
   beds.forEach((b) => {
     const fp = bedFootprint(b);
-    if (fp.w * SCALE < 46 || fp.d * SCALE < 24) tightNumbers.set(b.id, ++tightNum);
+    if (fp.w * SCALE < 20 || fp.d * SCALE < 16) tightNumbers.set(b.id, ++tightNum);
   });
 
   return (
@@ -4423,20 +4443,22 @@ function YardOverview({ yard, beds, features, plantings }) {
         const boxW = fp.w * SCALE, boxH = fp.d * SCALE;
         const cx = X(b.x) + boxW / 2, cy = Y(b.y) + boxH / 2;
         const num = tightNumbers.get(b.id);
+        const nameFontSize = 9.5, dimsFontSize = 8, lineHeight = 10.5;
+        const nameLines = num ? [] : wrapLabel(b.name, boxW, nameFontSize);
+        const totalLines = nameLines.length + 1; // + the dimensions line
+        const startY = cy - ((totalLines - 1) * lineHeight) / 2;
         const label = num ? (
           <>
             <circle cx={cx} cy={cy} r="7" fill="#fff" stroke="#8a7a5c" strokeWidth="1" />
             <text x={cx} y={cy + 3} textAnchor="middle" fontSize="8.5" className="svg-mono" fill="#2b2b22">{num}</text>
           </>
         ) : (
-          <>
-            <text x={cx} y={cy - 2} textAnchor="middle" fontSize="9.5" className="svg-body" fill="#2b2b22" {...haloProps}>
-              {truncate(b.name, 20)}
-            </text>
-            <text x={cx} y={cy + 10} textAnchor="middle" fontSize="8" className="svg-mono" fill="#5a5546" {...haloProps}>
-              {b.w}×{b.l}
-            </text>
-          </>
+          <text x={cx} textAnchor="middle" {...haloProps}>
+            {nameLines.map((line, i) => (
+              <tspan key={i} x={cx} y={startY + i * lineHeight} fontSize={nameFontSize} className="svg-body" fill="#2b2b22">{line}</tspan>
+            ))}
+            <tspan x={cx} y={startY + nameLines.length * lineHeight} fontSize={dimsFontSize} className="svg-mono" fill="#5a5546">{b.w}×{b.l}</tspan>
+          </text>
         );
         if (b.mask) {
           const runs = bedWallRuns(b.w, b.l, b.mask);
