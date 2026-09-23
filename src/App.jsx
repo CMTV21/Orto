@@ -726,6 +726,7 @@ const POSTS = {
   "4x4": { label: "4×4", actual: 3.5 },
   "6x6": { label: "6×6", actual: 5.5 },
 };
+const POST_EMBED_IN = 5; // how far a corner post is driven into the ground, beyond the wall height
 
 const MATERIALS = {
   cedar: { label: "Cedar", life: "15–20 years", ppf: 4.5, note: "Rot resistant untreated. The usual choice for food beds." },
@@ -818,7 +819,7 @@ function bedBuild(bed, opts) {
   // no lap joint that works around a concave turn, so it always gets posts
   // regardless of the global toggle.
   const usesPosts = opts.posts || !!bed.mask;
-  const postLenIn = usesPosts ? wallIn + 10 : 0;
+  const postLenIn = usesPosts ? wallIn + POST_EMBED_IN : 0;
 
   // A top plate is the same board species laid flat on the walls' top edge —
   // using the same nominal size means it naturally overhangs both faces by
@@ -3484,7 +3485,7 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
                             <td className="mono">{x.corners}</td>
                             <td>corner posts</td>
                             <td className="mono">{inchesToFtIn(x.postLenIn)}</td>
-                            <td className="orto-fine">{POSTS[build.post ?? "4x4"].label}, wall height plus 10″ driven in</td>
+                            <td className="orto-fine">{POSTS[build.post ?? "4x4"].label}, wall height plus {POST_EMBED_IN}″ driven in</td>
                           </tr>
                         )}
                       </tbody>
