@@ -3454,6 +3454,7 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
                       depth <input type="number" min="4" max="36" value={x.bed.depth ?? 12}
                         onChange={(e) => updateBed(x.bed.id, { depth: Number(e.target.value) || 12 })} /> in
                     </label>
+                    <BedBlueprint x={x} build={build} />
                   </div>
                 )}
               </div>
@@ -3603,6 +3604,130 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
           <li>Fill, water it down, top up. It settles more than you expect.</li>
         </ol>
       </aside>
+    </div>
+  );
+}
+
+/* A dimensioned plan view (drawn from the same wall-run geometry the cut
+   list is computed from, so it can never disagree with it) plus a generic
+   corner detail showing how the courses, post, and top plate stack — enough
+   to actually build from without needing the cut-list table open too. */
+function BedBlueprint({ x, build }) {
+  const board = BOARDS[build.board];
+  const { bed, courses, wallIn, postLenIn, topPlate, capOverhangIn } = x;
+  const planRef = useRef(null);
+  const elevRef = useRef(null);
+
+  const runs = useMemo(() => bedWallRuns(bed.w, bed.l, bed.mask), [bed.w, bed.l, bed.mask]);
+
+  const SCALE = 16, PAD = 30;
+  const planW = PAD * 2 + bed.w * SCALE;
+  const planH = PAD * 2 + bed.l * SCALE;
+  const cx = bed.w / 2, cy = bed.l / 2;
+  const toPx = (p) => ({ x: PAD + p.x * SCALE, y: PAD + p.y * SCALE });
+
+  const dims = runs.map((run, i) => {
+    const a = { x: run.x, y: run.y };
+    const b = run.orientation === "h" ? { x: run.x + run.len, y: run.y } : { x: run.x, y: run.y + run.len };
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    let nx = mid.x - cx, ny = mid.y - cy;
+    const nlen = Math.hypot(nx, ny) || 1;
+    nx /= nlen; ny /= nlen;
+    return { a: toPx(a), b: toPx(b), label: toPx({ x: mid.x + nx * 1.1, y: mid.y + ny * 1.1 }), lenIn: run.len * 12, key: i };
+  });
+
+  const EL_SCALE = 9; // px per inch — a fixed detail scale, not the plan's ft scale
+  const wallHpx = wallIn * EL_SCALE;
+  const capHpx = topPlate ? board.t * EL_SCALE : 0;
+  const capOverPx = topPlate ? capOverhangIn * EL_SCALE : 0;
+  const topY = 26;
+  const groundY = topY + wallHpx + capHpx;
+  const postBelowPx = postLenIn > 0 ? Math.max(0, postLenIn - wallIn) * EL_SCALE : 0;
+  const elW = 150, elH = groundY + postBelowPx + 22;
+
+  const printIt = () => {
+    if (!planRef.current || !elevRef.current) return;
+    const w = window.open("", "_blank", "width=760,height=920");
+    if (!w) return;
+    const mat = MATERIALS[build.material];
+    w.document.write(`<!doctype html><html><head><title>${bed.name} — blueprint</title>
+      <meta charset="utf-8">
+      <style>
+        body{font-family:-apple-system,Helvetica,Arial,sans-serif; padding:28px; color:#2b2b22;}
+        h1{font-size:19px; margin:0 0 4px;}
+        .meta{font-size:12.5px; color:#666; margin:0 0 22px;}
+        .row{display:flex; gap:36px; flex-wrap:wrap; align-items:flex-start;}
+        svg{max-width:100%; height:auto; overflow:visible;}
+        .cap{font-size:11.5px; color:#666; margin-top:8px;}
+        @media print { body{padding:0;} }
+      </style></head><body>
+      <h1>${bed.name}</h1>
+      <p class="meta">${bed.w} × ${bed.l} ft outer · ${inchesToFtIn(wallIn)} tall · ${board.label} ${mat.label}${topPlate ? " · top plate" : ""}${postLenIn > 0 ? " · corner posts" : ""}</p>
+      <div class="row">
+        <div>${planRef.current.outerHTML}<p class="cap">Plan view — wall lengths as cut</p></div>
+        <div>${elevRef.current.outerHTML}<p class="cap">Corner detail, drawn to its own scale — not the plan's</p></div>
+      </div>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 200);
+  };
+
+  return (
+    <div className="orto-blueprint">
+      <div className="orto-bp-actions">
+        <button type="button" className="orto-linkbtn" onClick={printIt}>Print blueprint</button>
+      </div>
+      <div className="orto-bp-views">
+        <div>
+          <svg ref={planRef} viewBox={`0 0 ${planW} ${planH}`} width={Math.min(planW, 260)}
+            role="img" aria-label={`${bed.name} plan view`}>
+            {bed.mask
+              ? bed.mask.map((on, i) => {
+                  if (!on) return null;
+                  const r = Math.floor(i / bed.w), c = i % bed.w;
+                  return <rect key={i} x={PAD + c * SCALE} y={PAD + r * SCALE} width={SCALE} height={SCALE} fill="#EFE7D8" />;
+                })
+              : <rect x={PAD} y={PAD} width={bed.w * SCALE} height={bed.l * SCALE} fill="#EFE7D8" />}
+            {dims.map((d) => (
+              <g key={d.key}>
+                <line x1={d.a.x} y1={d.a.y} x2={d.b.x} y2={d.b.y} stroke="#2b2b22" strokeWidth="2.5" strokeLinecap="square" />
+                <rect x={d.label.x - 18} y={d.label.y - 7} width="36" height="14" fill="#fff" opacity="0.9" rx="2" />
+                <text x={d.label.x} y={d.label.y + 3.5} textAnchor="middle" fontSize="9" className="svg-mono" fill="#2b2b22">
+                  {inchesToFtIn(d.lenIn)}
+                </text>
+              </g>
+            ))}
+          </svg>
+          <p className="orto-fine">Plan view — {bed.w} × {bed.l} ft outer footprint</p>
+        </div>
+        <div>
+          <svg ref={elevRef} viewBox={`0 0 ${elW} ${elH}`} width="150" role="img" aria-label={`${bed.name} corner detail`}>
+            <line x1="0" y1={groundY} x2={elW} y2={groundY} stroke="#8a7a5c" strokeWidth="2" />
+            {postLenIn > 0 && (
+              <rect x="24" y={topY} width="8" height={wallHpx + postBelowPx} fill="#B89B6A" stroke="#2b2b22" strokeWidth="1" />
+            )}
+            {Array.from({ length: courses }).map((_, i) => (
+              <rect key={i} x="32" y={topY + i * (wallHpx / courses)} width="70" height={wallHpx / courses - 1}
+                fill="#D8C7A1" stroke="#2b2b22" strokeWidth="1" />
+            ))}
+            {topPlate && (
+              <rect x={32 - capOverPx} y={topY - capHpx} width={70 + capOverPx * 2} height={capHpx}
+                fill="#E4D3AA" stroke="#2b2b22" strokeWidth="1" />
+            )}
+            <line x1="112" y1={topY} x2="112" y2={topY + wallHpx} stroke="#8a8272" strokeWidth="1" />
+            <text x="116" y={topY + wallHpx / 2 + 3} fontSize="9" className="svg-mono" fill="#5a5546">{inchesToFtIn(wallIn)}</text>
+            {postLenIn > 0 && postBelowPx > 0 && (
+              <text x="0" y={groundY + 14} fontSize="8.5" className="svg-mono" fill="#5a5546">
+                {Math.round(postLenIn - wallIn)}″ in ground
+              </text>
+            )}
+          </svg>
+          <p className="orto-fine">
+            Corner detail — {courses} course{courses === 1 ? "" : "s"} of {board.label}{topPlate ? " + top plate" : ""}, not to the plan's scale
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4901,6 +5026,10 @@ function Styles() {
 .orto-cuttable td{padding:3px 8px 3px 0; font-size:12.5px; vertical-align:baseline;}
 .orto-cuttable td:first-child{width:28px; color:var(--soil); font-weight:600;}
 .orto-cuttable td:nth-child(3){color:var(--chicory); white-space:nowrap;}
+.orto-blueprint{margin-top:12px; border-top:1px solid var(--rule-soft); padding-top:10px;}
+.orto-bp-actions{margin-bottom:8px;}
+.orto-bp-views{display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;}
+.orto-bp-views svg{background:var(--paper); border:1px solid var(--rule); border-radius:6px;}
 .orto-barlist{display:flex; flex-direction:column; gap:3px; margin-top:8px;}
 .orto-bar{display:flex; align-items:center; gap:8px;}
 .orto-barno{font-size:10px; color:var(--ink-soft); width:20px; flex:none;}
