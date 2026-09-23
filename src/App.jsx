@@ -736,6 +736,10 @@ const MATERIALS = {
 };
 
 const STOCK_LENGTHS = [8, 10, 12, 16];
+/* Longer stock often isn't priced at the same $/ft as short stock — a 16 ft
+   board is frequently a premium length, sometimes the reverse in bulk — so
+   each stock length gets its own editable price rather than one flat rate. */
+const defaultPricePerFt = (ppf) => Object.fromEntries(STOCK_LENGTHS.map((L) => [L, ppf]));
 const KERF = 0.125;
 /* A saw kerf comes out of the middle of a cut, so an 8 ft and a 4 ft piece do
    come out of a 12 ft board — one just finishes an eighth short. Allow for that
@@ -1063,7 +1067,7 @@ function makeBlankState() {
     seeds: [],
     customCrops: [],
     taskDone: {},
-    build: { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, ppf: MATERIALS.cedar.ppf },
+    build: { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, pricePerFt: defaultPricePerFt(MATERIALS.cedar.ppf) },
     frost: {},
     location: null,
   };
@@ -1077,7 +1081,14 @@ function migrate(s) {
   next.seeds = s.seeds ?? [];
   next.plantings = s.plantings ?? [];
   next.measures = s.measures ?? [];
-  next.build = { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, ppf: MATERIALS.cedar.ppf, ...(s.build || {}) };
+  next.build = { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, pricePerFt: defaultPricePerFt(MATERIALS.cedar.ppf), ...(s.build || {}) };
+  // Older saves priced every stock length the same, at a single build.ppf —
+  // carry that number forward as this bed's starting price per length
+  // instead of silently reverting a customized price back to cedar's default.
+  if (s.build?.ppf != null && s.build?.pricePerFt == null) {
+    next.build.pricePerFt = defaultPricePerFt(s.build.ppf);
+  }
+  delete next.build.ppf;
   next.customCrops = s.customCrops ?? [];
   next.taskDone = s.taskDone ?? {};
   next.location = s.location ?? null;
@@ -3321,16 +3332,32 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
     return { total, maxLen, per, stock8: Math.ceil(total / Math.max(perStock, 1)), perStock };
   }, [builds]);
 
+  const pricePerFt = build.pricePerFt ?? defaultPricePerFt(mat.ppf);
+
   const totals = useMemo(() => {
     const screws = builds.reduce((n, x) => n + x.screws, 0);
     const fabric = builds.reduce((n, x) => n + x.fabricSqFt, 0);
     const soil = builds.reduce((n, x) => n + x.soilCuFt, 0);
     const boardFt = pack ? pack.totalFt : 0;
-    const lumberCost = boardFt * (build.ppf || 0) * board.priceMult;
+    const lumberCost = pack ? boardFt * (pricePerFt[pack.stockFt] ?? 0) * board.priceMult : 0;
     return { screws, fabric, soil, boardFt, lumberCost, bars: pack?.bars.length ?? 0 };
-  }, [builds, pack, build.ppf, board.priceMult]);
+  }, [builds, pack, pricePerFt, board.priceMult]);
 
   const oversize = pack?.oversize ?? [];
+
+  const stockRows = useMemo(() => STOCK_LENGTHS.map((L) => {
+    const r = packPieces(allPieces, L);
+    const cost = r.oversize.length ? null : r.totalFt * (pricePerFt[L] ?? 0) * board.priceMult;
+    return { L, r, cost };
+  }), [allPieces, pricePerFt, board.priceMult]);
+
+  const cheapestL = useMemo(() => {
+    const viable = stockRows.filter((s) => s.cost != null);
+    if (!viable.length) return null;
+    return viable.reduce((a, b) => (b.cost < a.cost ? b : a)).L;
+  }, [stockRows]);
+
+  const setLengthPrice = (L, value) => setBuild({ pricePerFt: { ...pricePerFt, [L]: Number(value) || 0 } });
 
   return (
     <div className="orto-build">
@@ -3349,7 +3376,8 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
             </select>
           </label>
           <label>Material
-            <select className="orto-input" value={build.material} onChange={(e) => setBuild({ material: e.target.value, ppf: MATERIALS[e.target.value].ppf })}>
+            <select className="orto-input" value={build.material}
+              onChange={(e) => setBuild({ material: e.target.value, pricePerFt: defaultPricePerFt(MATERIALS[e.target.value].ppf) })}>
               {Object.entries(MATERIALS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </label>
@@ -3357,10 +3385,6 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
             <select className="orto-input" value={build.post ?? "4x4"} onChange={(e) => setBuild({ post: e.target.value })}>
               {Object.entries(POSTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
-          </label>
-          <label>Your price per linear ft
-            <input className="orto-input mono" type="number" min="0" step="0.05" value={build.ppf}
-              onChange={(e) => setBuild({ ppf: Number(e.target.value) || 0 })} />
           </label>
           <div className="orto-toggles mono">
             <button className={build.posts ? "on" : ""} onClick={() => setBuild({ posts: !build.posts })}>Corner posts</button>
@@ -3483,23 +3507,30 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
 
             <table className="orto-stocktable">
               <thead>
-                <tr><th>Stock</th><th>Boards</th><th>Linear ft</th><th>Offcut</th><th></th></tr>
+                <tr><th>Stock</th><th>Boards</th><th>Linear ft</th><th>Offcut</th><th>$/ft</th><th>Cost</th><th></th></tr>
               </thead>
               <tbody>
-                {STOCK_LENGTHS.map((L) => {
-                  const r = packPieces(allPieces, L);
+                {stockRows.map(({ L, r, cost }) => {
                   const chosen = L === pack.stockFt;
+                  const cheapest = L === cheapestL;
+                  const notes = [];
+                  if (r.oversize.length) notes.push(`${r.oversize.length} ${r.oversize.length === 1 ? "piece is" : "pieces are"} too long`);
+                  else {
+                    if (chosen) notes.push("least material");
+                    if (cheapest) notes.push("cheapest");
+                  }
                   return (
                     <tr key={L} className={chosen ? "cur" : ""}>
                       <td className="mono">{L} ft</td>
                       <td className="mono">{r.oversize.length ? "—" : r.bars.length}</td>
                       <td className="mono">{r.oversize.length ? "—" : r.totalFt}</td>
                       <td className="mono">{r.oversize.length ? "—" : inchesToFtIn(r.wasteIn)}</td>
-                      <td className="orto-fine">
-                        {r.oversize.length
-                          ? `${r.oversize.length} ${r.oversize.length === 1 ? "piece is" : "pieces are"} too long`
-                          : chosen ? "least material" : ""}
+                      <td className="mono">
+                        <input type="number" min="0" step="0.05" className="orto-pricecell" value={pricePerFt[L] ?? 0}
+                          onChange={(e) => setLengthPrice(L, e.target.value)} />
                       </td>
+                      <td className="mono">{cost == null ? "—" : `$${cost.toFixed(0)}`}</td>
+                      <td className="orto-fine">{notes.join(" · ")}</td>
                     </tr>
                   );
                 })}
@@ -3507,7 +3538,8 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
             </table>
             <p className="orto-fine">
               Fewer, longer boards mean fewer joins but a harder load to get home. Shorter stock with no waste is
-              usually the better buy if the numbers come out even.
+              usually the better buy if the numbers come out even — but check the cost column too: a length priced
+              at a premium can waste the least material and still not be the cheapest way to buy it.
             </p>
 
             <div className="orto-barlist">
@@ -3597,8 +3629,9 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
           ${totals.lumberCost.toFixed(0)}<i> lumber</i>
         </p>
         <p className="orto-fine">
-          {totals.boardFt} linear ft at ${(build.ppf * board.priceMult).toFixed(2)}/ft for {board.label}.
-          Posts, screws, fabric and soil are on top — soil is usually the bigger line once you're buying by the yard.
+          {totals.boardFt} linear ft at ${pack ? ((pricePerFt[pack.stockFt] ?? 0) * board.priceMult).toFixed(2) : "0.00"}/ft
+          for {board.label} at {pack?.stockFt ?? 8} ft. Posts, screws, fabric and soil are on top — soil is usually
+          the bigger line once you're buying by the yard.
         </p>
         <p className="orto-fine orto-caveat">
           The price is a placeholder until you put your own in. Check a local mill for hemlock before the big box
@@ -4298,7 +4331,8 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
   const soilCuFt = builds.reduce((n, x) => n + x.soilCuFt, 0);
   const fabricSqFt = builds.reduce((n, x) => n + x.fabricSqFt, 0);
   const screws = builds.reduce((n, x) => n + x.screws, 0);
-  const lumberCost = pack ? pack.totalFt * (build.ppf || 0) * board.priceMult : 0;
+  const pricePerFt = build.pricePerFt ?? defaultPricePerFt(mat.ppf);
+  const lumberCost = pack ? pack.totalFt * (pricePerFt[pack.stockFt] ?? 0) * board.priceMult : 0;
   const totalSqFt = beds.reduce((n, b) => n + bedAreaSqFt(b), 0);
   const totalPosts = builds.reduce((n, x) => n + (x.postLenIn > 0 ? x.corners : 0), 0);
 
@@ -4939,11 +4973,12 @@ function Styles() {
 .orto-mix li span{width:70px; flex:none; font-size:11.5px; color:var(--ink-soft);}
 .orto-featedit{margin-top:14px; border-top:1px solid var(--rule); padding-top:4px;}
 
-.orto-stocktable{border-collapse:collapse; width:100%; max-width:520px; margin:10px 0 6px;}
+.orto-stocktable{border-collapse:collapse; width:100%; max-width:640px; margin:10px 0 6px;}
 .orto-stocktable th{font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-soft); font-weight:500; text-align:left; padding:5px 9px; border-bottom:1px solid var(--rule);}
 .orto-stocktable td{padding:5px 9px; font-size:12.5px; border-bottom:1px solid var(--rule-soft);}
 .orto-stocktable tr.cur td{background:rgba(85,107,69,.09); font-weight:600;}
 .orto-stocktable td.orto-fine{font-weight:400;}
+.orto-pricecell{width:52px; border:1px solid var(--rule); border-radius:4px; padding:2px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; background:#fff; color:var(--ink);}
 
 .orto-addbar{display:flex; flex-wrap:wrap; gap:5px; margin:10px 0 0;}
 .orto-addbar button{background:transparent; border:1px solid var(--rule); border-radius:6px; padding:4px 11px; font-size:11.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace;}
