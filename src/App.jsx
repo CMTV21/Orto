@@ -4348,8 +4348,25 @@ function YardOverview({ yard, beds, features, plantings }) {
   const X = (x) => PAD + x * SCALE;
   const Y = (y) => PAD + y * SCALE;
   const edgeStyle = { fence: "#7A6A57", house: "#2b2b22", open: "#c8c2b0" };
+  const truncate = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+  // A halo behind every label — the only defence against overlapping text
+  // once beds or features sit close together, since nothing here can be
+  // dragged apart the way the interactive Yard tab allows.
+  const haloProps = { paintOrder: "stroke", stroke: "#EFF2E7", strokeWidth: 3, strokeLinejoin: "round" };
+
+  // Multiple narrow beds side by side (a row of strips along a fence, say)
+  // can't each fit a label without spilling into the next one — those get
+  // a plain numbered marker on the drawing and their names listed below it
+  // instead, rather than fighting for the same few pixels.
+  let tightNum = 0;
+  const tightNumbers = new Map();
+  beds.forEach((b) => {
+    const fp = bedFootprint(b);
+    if (fp.w * SCALE < 46 || fp.d * SCALE < 24) tightNumbers.set(b.id, ++tightNum);
+  });
 
   return (
+    <>
     <svg viewBox={`0 0 ${VBW} ${VBH}`} width="100%" style={{ maxWidth: 620 }} role="img" aria-label="Yard layout">
       <defs>
         <pattern id="summaryHouse" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -4403,6 +4420,24 @@ function YardOverview({ yard, beds, features, plantings }) {
 
       {beds.map((b) => {
         const fp = bedFootprint(b);
+        const boxW = fp.w * SCALE, boxH = fp.d * SCALE;
+        const cx = X(b.x) + boxW / 2, cy = Y(b.y) + boxH / 2;
+        const num = tightNumbers.get(b.id);
+        const label = num ? (
+          <>
+            <circle cx={cx} cy={cy} r="7" fill="#fff" stroke="#8a7a5c" strokeWidth="1" />
+            <text x={cx} y={cy + 3} textAnchor="middle" fontSize="8.5" className="svg-mono" fill="#2b2b22">{num}</text>
+          </>
+        ) : (
+          <>
+            <text x={cx} y={cy - 2} textAnchor="middle" fontSize="9.5" className="svg-body" fill="#2b2b22" {...haloProps}>
+              {truncate(b.name, 20)}
+            </text>
+            <text x={cx} y={cy + 10} textAnchor="middle" fontSize="8" className="svg-mono" fill="#5a5546" {...haloProps}>
+              {b.w}×{b.l}
+            </text>
+          </>
+        );
         if (b.mask) {
           const runs = bedWallRuns(b.w, b.l, b.mask);
           return (
@@ -4418,14 +4453,14 @@ function YardOverview({ yard, beds, features, plantings }) {
                 const y2 = run.orientation === "v" ? y1 + run.len * SCALE : y1;
                 return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#8a7a5c" strokeWidth="1.4" strokeLinecap="square" />;
               })}
-              <text x={X(b.x) + (fp.w * SCALE) / 2} y={Y(b.y) + (fp.d * SCALE) / 2} textAnchor="middle" fontSize="9.5" className="svg-body" fill="#2b2b22">{b.name}</text>
+              {label}
             </g>
           );
         }
         return (
           <g key={b.id}>
-            <rect x={X(b.x)} y={Y(b.y)} width={fp.w * SCALE} height={fp.d * SCALE} rx="2" fill="#DFD6C6" stroke="#8a7a5c" strokeWidth="1" />
-            <text x={X(b.x) + (fp.w * SCALE) / 2} y={Y(b.y) + (fp.d * SCALE) / 2} textAnchor="middle" fontSize="9.5" className="svg-body" fill="#2b2b22">{b.name}</text>
+            <rect x={X(b.x)} y={Y(b.y)} width={boxW} height={boxH} rx="2" fill="#DFD6C6" stroke="#8a7a5c" strokeWidth="1" />
+            {label}
           </g>
         );
       })}
@@ -4447,6 +4482,12 @@ function YardOverview({ yard, beds, features, plantings }) {
         <text x="0" y="-13" textAnchor="middle" fontSize="7.5" className="svg-mono" fill="#A3562E">N</text>
       </g>
     </svg>
+    {tightNumbers.size > 0 && (
+      <p className="orto-fine">
+        {beds.filter((b) => tightNumbers.has(b.id)).map((b) => `${tightNumbers.get(b.id)}. ${b.name} ${b.w}×${b.l}`).join(" · ")}
+      </p>
+    )}
+    </>
   );
 }
 
