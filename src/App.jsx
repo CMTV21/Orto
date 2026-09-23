@@ -785,7 +785,7 @@ function bedBuild(bed, opts) {
     const runs = bedWallRuns(bed.w, bed.l, bed.mask);
     corners = runs.length;
     runs.forEach((run) => {
-      for (let c = 0; c < courses; c++) pieces.push({ len: run.len * 12, label: `${bed.name} · wall`, bed: bed.id });
+      for (let c = 0; c < courses; c++) pieces.push({ len: run.len * 12, label: `${bed.name} · wall`, bed: bed.id, kind: "wall" });
     });
     const lens = runs.map((r) => r.len);
     longIn = Math.max(...lens) * 12;
@@ -798,10 +798,10 @@ function bedBuild(bed, opts) {
     longIn = longFt * 12;
     shortIn = shortFt * 12 - (opts.posts ? 0 : 2 * board.t);
     for (let c = 0; c < courses; c++) {
-      pieces.push({ len: longIn, label: `${bed.name} · side`, bed: bed.id });
-      pieces.push({ len: longIn, label: `${bed.name} · side`, bed: bed.id });
-      pieces.push({ len: shortIn, label: `${bed.name} · end`, bed: bed.id });
-      pieces.push({ len: shortIn, label: `${bed.name} · end`, bed: bed.id });
+      pieces.push({ len: longIn, label: `${bed.name} · side`, bed: bed.id, kind: "wall" });
+      pieces.push({ len: longIn, label: `${bed.name} · side`, bed: bed.id, kind: "wall" });
+      pieces.push({ len: shortIn, label: `${bed.name} · end`, bed: bed.id, kind: "wall" });
+      pieces.push({ len: shortIn, label: `${bed.name} · end`, bed: bed.id, kind: "wall" });
     }
   }
 
@@ -810,11 +810,39 @@ function bedBuild(bed, opts) {
   // regardless of the global toggle.
   const usesPosts = opts.posts || !!bed.mask;
   const postLenIn = usesPosts ? wallIn + 10 : 0;
-  const screws = courses * corners * (usesPosts ? 4 : 2);
+
+  // A top plate is the same board species laid flat on the walls' top edge —
+  // using the same nominal size means it naturally overhangs both faces by
+  // half the difference between the board's width and its thickness, which
+  // is what actually gives it a lip to rest a hand or a knee on.
+  const capOverhangIn = opts.topPlate ? (board.h - board.t) / 2 : 0;
+  let capLongIn = 0, capShortIn = 0;
+  if (opts.topPlate) {
+    if (bed.mask) {
+      const runs = bedWallRuns(bed.w, bed.l, bed.mask);
+      runs.forEach((run) => {
+        pieces.push({ len: run.len * 12 + 2 * capOverhangIn, label: `${bed.name} · cap`, bed: bed.id, kind: "cap" });
+      });
+    } else {
+      const longFt = Math.max(bed.w, bed.l);
+      const shortFt = Math.min(bed.w, bed.l);
+      capLongIn = longFt * 12 + 2 * capOverhangIn;
+      capShortIn = shortFt * 12 + 2 * capOverhangIn - 2 * board.t;
+      pieces.push({ len: capLongIn, label: `${bed.name} · cap`, bed: bed.id, kind: "cap" });
+      pieces.push({ len: capLongIn, label: `${bed.name} · cap`, bed: bed.id, kind: "cap" });
+      pieces.push({ len: capShortIn, label: `${bed.name} · cap`, bed: bed.id, kind: "cap" });
+      pieces.push({ len: capShortIn, label: `${bed.name} · cap`, bed: bed.id, kind: "cap" });
+    }
+  }
+
+  const screws = courses * corners * (usesPosts ? 4 : 2) + (opts.topPlate ? corners * 3 : 0);
   const fabricSqFt = bedAreaSqFt(bed);
   const soilCuFt = fabricSqFt * (wallIn / 12);
 
-  return { bed, courses, wallIn, pieces, longIn, shortIn, postLenIn, screws, fabricSqFt, soilCuFt, corners };
+  return {
+    bed, courses, wallIn, pieces, longIn, shortIn, postLenIn, screws, fabricSqFt, soilCuFt, corners,
+    topPlate: !!opts.topPlate, capLongIn, capShortIn, capOverhangIn,
+  };
 }
 
 const inchesToFtIn = (v) => {
@@ -1030,7 +1058,7 @@ function makeBlankState() {
     seeds: [],
     customCrops: [],
     taskDone: {},
-    build: { board: "2x6", material: "cedar", posts: true, fabric: true, ppf: MATERIALS.cedar.ppf },
+    build: { board: "2x6", material: "cedar", posts: true, fabric: true, topPlate: false, ppf: MATERIALS.cedar.ppf },
     frost: {},
     location: null,
   };
@@ -1044,7 +1072,7 @@ function migrate(s) {
   next.seeds = s.seeds ?? [];
   next.plantings = s.plantings ?? [];
   next.measures = s.measures ?? [];
-  next.build = { board: "2x6", material: "cedar", posts: true, fabric: true, ppf: MATERIALS.cedar.ppf, ...(s.build || {}) };
+  next.build = { board: "2x6", material: "cedar", posts: true, fabric: true, topPlate: false, ppf: MATERIALS.cedar.ppf, ...(s.build || {}) };
   next.customCrops = s.customCrops ?? [];
   next.taskDone = s.taskDone ?? {};
   next.location = s.location ?? null;
@@ -3327,6 +3355,7 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
           <div className="orto-toggles mono">
             <button className={build.posts ? "on" : ""} onClick={() => setBuild({ posts: !build.posts })}>Corner posts</button>
             <button className={build.fabric ? "on" : ""} onClick={() => setBuild({ fabric: !build.fabric })}>Ground fabric</button>
+            <button className={build.topPlate ? "on" : ""} onClick={() => setBuild({ topPlate: !build.topPlate })}>Top plate</button>
           </div>
         </div>
 
@@ -3343,6 +3372,7 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
           {board.label} boards, {builds[0]?.courses ?? 1} {(builds[0]?.courses ?? 1) === 1 ? "course" : "courses"} high.
           Long sides run the full length; ends fit between them
           {build.posts ? ", screwed into corner posts." : ", butted inside the long boards."}
+          {build.topPlate && " A top plate of the same board, laid flat, caps the walls and overhangs both faces."}
         </p>
 
         <div className="orto-cutlist">
@@ -3362,13 +3392,17 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
                       <tbody>
                         {x.bed.mask ? (
                           Object.entries(
-                            x.pieces.reduce((acc, p) => { acc[p.len] = (acc[p.len] || 0) + 1; return acc; }, {})
-                          ).sort((a, b) => b[0] - a[0]).map(([len, n]) => (
-                            <tr key={len}>
-                              <td className="mono">{n}</td>
-                              <td>wall boards</td>
-                              <td className="mono">{inchesToFtIn(Number(len))}</td>
-                              <td className="orto-fine">meets its neighbor at a post — {x.corners} corners around this shape</td>
+                            x.pieces.reduce((acc, p) => { const k = `${p.len}|${p.kind}`; acc[k] = acc[k] || { n: 0, len: p.len, kind: p.kind }; acc[k].n++; return acc; }, {})
+                          ).sort((a, b) => b[1].len - a[1].len).map(([key, g]) => (
+                            <tr key={key}>
+                              <td className="mono">{g.n}</td>
+                              <td>{g.kind === "cap" ? "cap boards" : "wall boards"}</td>
+                              <td className="mono">{inchesToFtIn(g.len)}</td>
+                              <td className="orto-fine">
+                                {g.kind === "cap"
+                                  ? "laid flat atop a wall run, overhanging both faces"
+                                  : `meets its neighbor at a post — ${x.corners} corners around this shape`}
+                              </td>
                             </tr>
                           ))
                         ) : (
@@ -3384,6 +3418,22 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
                               <td>ends</td>
                               <td className="mono">{inchesToFtIn(x.shortIn)}</td>
                               <td className="orto-fine">{build.posts ? "full inside width" : `${Math.min(x.bed.w, x.bed.l)} ft less two board thicknesses`}</td>
+                            </tr>
+                          </>
+                        )}
+                        {x.topPlate && !x.bed.mask && (
+                          <>
+                            <tr>
+                              <td className="mono">2</td>
+                              <td>cap, long</td>
+                              <td className="mono">{inchesToFtIn(x.capLongIn)}</td>
+                              <td className="orto-fine">full length plus {inchesToFtIn(x.capOverhangIn)} overhang each end</td>
+                            </tr>
+                            <tr>
+                              <td className="mono">2</td>
+                              <td>cap, short</td>
+                              <td className="mono">{inchesToFtIn(x.capShortIn)}</td>
+                              <td className="orto-fine">fits between the long caps, same overhang</td>
                             </tr>
                           </>
                         )}
