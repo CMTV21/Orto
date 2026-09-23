@@ -1067,7 +1067,7 @@ function makeBlankState() {
     seeds: [],
     customCrops: [],
     taskDone: {},
-    build: { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, pricePerFt: defaultPricePerFt(MATERIALS.cedar.ppf) },
+    build: { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, stockLength: null, pricePerFt: defaultPricePerFt(MATERIALS.cedar.ppf) },
     frost: {},
     location: null,
   };
@@ -1081,7 +1081,7 @@ function migrate(s) {
   next.seeds = s.seeds ?? [];
   next.plantings = s.plantings ?? [];
   next.measures = s.measures ?? [];
-  next.build = { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, pricePerFt: defaultPricePerFt(MATERIALS.cedar.ppf), ...(s.build || {}) };
+  next.build = { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, stockLength: null, pricePerFt: defaultPricePerFt(MATERIALS.cedar.ppf), ...(s.build || {}) };
   // Older saves priced every stock length the same, at a single build.ppf —
   // carry that number forward as this bed's starting price per length
   // instead of silently reverting a customized price back to cedar's default.
@@ -3317,7 +3317,11 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
 
   /* every piece across every bed, packed together — buying in one go wastes less */
   const allPieces = useMemo(() => builds.flatMap((x) => x.pieces), [builds]);
-  const pack = useMemo(() => bestPack(allPieces), [allPieces]);
+  const autoPack = useMemo(() => bestPack(allPieces), [allPieces]);
+  const pack = useMemo(
+    () => (build.stockLength ? packPieces(allPieces, build.stockLength) : autoPack),
+    [allPieces, build.stockLength, autoPack]
+  );
 
   const posts = useMemo(() => {
     // A bed's own postLenIn is already 0 unless it actually needs posts —
@@ -3397,7 +3401,10 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
 
         {oversize.length > 0 && (
           <p className="orto-note warn">
-            {oversize.length} {oversize.length === 1 ? "piece is" : "pieces are"} longer than a 16 ft board and will need splicing over a post.
+            {oversize.length} {oversize.length === 1 ? "piece is" : "pieces are"} longer than a {pack.stockFt} ft board
+            {build.stockLength
+              ? " — pick a longer stock length below, or it'll need splicing over a post."
+              : " and will need splicing over a post."}
           </p>
         )}
 
@@ -3500,27 +3507,33 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
           <>
             <h3 className="orto-h3">How the boards get cut</h3>
             <p className="orto-fine">
-              {pack.wasteIn < 6
+              {build.stockLength
+                ? `Buying at ${pack.stockFt} ft, picked by hand below.`
+                : pack.wasteIn < 6
                 ? `${pack.bars.length} boards at ${pack.stockFt} ft covers it with essentially nothing left over.`
                 : `Buying ${pack.bars.length} boards at ${pack.stockFt} ft wastes the least — about ${inchesToFtIn(pack.wasteIn)} of offcut in total.`}
+              {build.stockLength && (
+                <button type="button" className="orto-linkbtn" onClick={() => setBuild({ stockLength: null })}>use least material instead</button>
+              )}
             </p>
 
             <table className="orto-stocktable">
               <thead>
-                <tr><th>Stock</th><th>Boards</th><th>Linear ft</th><th>Offcut</th><th>$/ft</th><th>Cost</th><th></th></tr>
+                <tr><th>Stock</th><th>Boards</th><th>Linear ft</th><th>Offcut</th><th>$/ft</th><th>Cost</th><th></th><th></th></tr>
               </thead>
               <tbody>
                 {stockRows.map(({ L, r, cost }) => {
-                  const chosen = L === pack.stockFt;
+                  const inUse = L === pack.stockFt;
+                  const leastMaterial = L === autoPack.stockFt;
                   const cheapest = L === cheapestL;
                   const notes = [];
                   if (r.oversize.length) notes.push(`${r.oversize.length} ${r.oversize.length === 1 ? "piece is" : "pieces are"} too long`);
                   else {
-                    if (chosen) notes.push("least material");
+                    if (leastMaterial) notes.push("least material");
                     if (cheapest) notes.push("cheapest");
                   }
                   return (
-                    <tr key={L} className={chosen ? "cur" : ""}>
+                    <tr key={L} className={inUse ? "cur" : ""}>
                       <td className="mono">{L} ft</td>
                       <td className="mono">{r.oversize.length ? "—" : r.bars.length}</td>
                       <td className="mono">{r.oversize.length ? "—" : r.totalFt}</td>
@@ -3531,6 +3544,13 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
                       </td>
                       <td className="mono">{cost == null ? "—" : `$${cost.toFixed(0)}`}</td>
                       <td className="orto-fine">{notes.join(" · ")}</td>
+                      <td>
+                        {inUse ? (
+                          <span className="orto-fine">in use</span>
+                        ) : (
+                          <button type="button" className="orto-linkbtn" onClick={() => setBuild({ stockLength: L })}>use this</button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -3539,7 +3559,8 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
             <p className="orto-fine">
               Fewer, longer boards mean fewer joins but a harder load to get home. Shorter stock with no waste is
               usually the better buy if the numbers come out even — but check the cost column too: a length priced
-              at a premium can waste the least material and still not be the cheapest way to buy it.
+              at a premium can waste the least material and still not be the cheapest way to buy it. Pick any row
+              with "use this" to build the cut list and shopping list around that length instead of the automatic pick.
             </p>
 
             <div className="orto-barlist">
@@ -4327,7 +4348,11 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
 
   const builds = useMemo(() => beds.map((b) => bedBuild(b, build)), [beds, build]);
   const allPieces = useMemo(() => builds.flatMap((x) => x.pieces), [builds]);
-  const pack = useMemo(() => bestPack(allPieces), [allPieces]);
+  const autoPack = useMemo(() => bestPack(allPieces), [allPieces]);
+  const pack = useMemo(
+    () => (build.stockLength ? packPieces(allPieces, build.stockLength) : autoPack),
+    [allPieces, build.stockLength, autoPack]
+  );
   const soilCuFt = builds.reduce((n, x) => n + x.soilCuFt, 0);
   const fabricSqFt = builds.reduce((n, x) => n + x.fabricSqFt, 0);
   const screws = builds.reduce((n, x) => n + x.screws, 0);
