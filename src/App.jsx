@@ -2036,6 +2036,7 @@ export default function GardenPlanner() {
           <SummaryTab
             beds={beds}
             yard={yard}
+            features={state.features || []}
             build={state.build}
             seeds={state.seeds || []}
             gardenTally={gardenTally}
@@ -4335,13 +4336,127 @@ function LedgerTab({ beds, plans, year }) {
   );
 }
 
+/* A static, read-only top-down plan for the printable Summary sheet —
+   the interactive Yard tab canvas has drag handles, tool state, and a
+   measure overlay that have no place on a printout, so this redraws the
+   same beds/features/plantings from scratch without any of that. */
+function YardOverview({ yard, beds, features, plantings }) {
+  const SCALE = Math.max(6, Math.min(16, 620 / Math.max(yard.w, yard.d, 1)));
+  const PAD = 30;
+  const VBW = PAD * 2 + yard.w * SCALE;
+  const VBH = PAD * 2 + yard.d * SCALE;
+  const X = (x) => PAD + x * SCALE;
+  const Y = (y) => PAD + y * SCALE;
+  const edgeStyle = { fence: "#7A6A57", house: "#2b2b22", open: "#c8c2b0" };
+
+  return (
+    <svg viewBox={`0 0 ${VBW} ${VBH}`} width="100%" style={{ maxWidth: 620 }} role="img" aria-label="Yard layout">
+      <defs>
+        <pattern id="summaryHouse" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="7" stroke="#2b2b22" strokeWidth="1.4" opacity="0.5" />
+        </pattern>
+      </defs>
+
+      <rect x={PAD} y={PAD} width={yard.w * SCALE} height={yard.d * SCALE} fill="#EFF2E7" stroke="#c9d0bd" strokeWidth="1" />
+
+      {/* ruler — 5 ft ticks only, a finer one would clutter a page-sized drawing */}
+      {Array.from({ length: Math.floor(yard.w / 5) + 1 }).map((_, i) => (
+        <text key={"rx" + i} x={X(i * 5)} y={PAD - 7} textAnchor="middle" fontSize="8" className="svg-mono" fill="#8a8272">{i * 5}</text>
+      ))}
+      {Array.from({ length: Math.floor(yard.d / 5) + 1 }).map((_, i) => (
+        <text key={"ry" + i} x={PAD - 7} y={Y(i * 5) + 3} textAnchor="end" fontSize="8" className="svg-mono" fill="#8a8272">{i * 5}</text>
+      ))}
+
+      {[
+        ["north", PAD, PAD, yard.w * SCALE, 0],
+        ["east", PAD + yard.w * SCALE, PAD, 0, yard.d * SCALE],
+        ["south", PAD, PAD + yard.d * SCALE, yard.w * SCALE, 0],
+        ["west", PAD, PAD, 0, yard.d * SCALE],
+      ].map(([side, x1, y1, w, h]) => {
+        const kind = yard.edges?.[side] ?? "open";
+        return (
+          <line key={side} x1={x1} y1={y1} x2={x1 + w} y2={y1 + h}
+            stroke={edgeStyle[kind]} strokeWidth={kind === "open" ? 1 : 2.5} strokeDasharray={kind === "open" ? "5 5" : undefined} />
+        );
+      })}
+
+      {features.map((f) => {
+        const k = FEATURE_KINDS[f.kind] || {};
+        const fill = k.fill ?? "#999";
+        const cx = X(f.x + f.w / 2), cy = Y(f.y + f.d / 2);
+        if (k.shape === "circle") {
+          return <circle key={f.id} cx={cx} cy={cy} r={(f.w / 2) * SCALE} fill={fill} opacity="0.25" stroke={fill} strokeWidth="1" />;
+        }
+        if (k.shape === "line") {
+          const vertical = f.d > f.w;
+          return (
+            <line key={f.id} x1={vertical ? cx : X(f.x)} y1={vertical ? Y(f.y) : cy}
+              x2={vertical ? cx : X(f.x + f.w)} y2={vertical ? Y(f.y + f.d) : cy}
+              stroke={fill} strokeWidth="2.5" />
+          );
+        }
+        return (
+          <rect key={f.id} x={X(f.x)} y={Y(f.y)} width={f.w * SCALE} height={f.d * SCALE} rx="2"
+            fill={k.hatch ? "url(#summaryHouse)" : fill} opacity={k.hatch ? 0.5 : 0.25} stroke={fill} strokeWidth="1" />
+        );
+      })}
+
+      {beds.map((b) => {
+        const fp = bedFootprint(b);
+        if (b.mask) {
+          const runs = bedWallRuns(b.w, b.l, b.mask);
+          return (
+            <g key={b.id}>
+              {b.mask.map((on, i) => {
+                if (!on) return null;
+                const r = Math.floor(i / b.w), c = i % b.w;
+                return <rect key={i} x={X(b.x) + c * SCALE} y={Y(b.y) + r * SCALE} width={SCALE} height={SCALE} fill="#DFD6C6" />;
+              })}
+              {runs.map((run, i) => {
+                const x1 = X(b.x) + run.x * SCALE, y1 = Y(b.y) + run.y * SCALE;
+                const x2 = run.orientation === "h" ? x1 + run.len * SCALE : x1;
+                const y2 = run.orientation === "v" ? y1 + run.len * SCALE : y1;
+                return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#8a7a5c" strokeWidth="1.4" strokeLinecap="square" />;
+              })}
+              <text x={X(b.x) + (fp.w * SCALE) / 2} y={Y(b.y) + (fp.d * SCALE) / 2} textAnchor="middle" fontSize="9.5" className="svg-body" fill="#2b2b22">{b.name}</text>
+            </g>
+          );
+        }
+        return (
+          <g key={b.id}>
+            <rect x={X(b.x)} y={Y(b.y)} width={fp.w * SCALE} height={fp.d * SCALE} rx="2" fill="#DFD6C6" stroke="#8a7a5c" strokeWidth="1" />
+            <text x={X(b.x) + (fp.w * SCALE) / 2} y={Y(b.y) + (fp.d * SCALE) / 2} textAnchor="middle" fontSize="9.5" className="svg-body" fill="#2b2b22">{b.name}</text>
+          </g>
+        );
+      })}
+
+      {plantings.map((p) => {
+        const sp = BUSHES[p.speciesId];
+        if (!sp) return null;
+        return (
+          <circle key={p.id} cx={X(p.x + p.w / 2)} cy={Y(p.y + p.w / 2)} r={Math.max(2, (p.w / 2) * SCALE)}
+            fill="#7A2E3A" opacity="0.3" stroke="#7A2E3A" strokeWidth="1" />
+        );
+      })}
+
+      <g transform={`translate(${VBW - 18},18)`}>
+        <circle r="12" fill="#fff" stroke="#c9d0bd" strokeWidth="1" />
+        <g transform={`rotate(${yard.northAngle || 0})`}>
+          <path d="M 0,-8 L 3,3 L 0,0.5 L -3,3 Z" fill="#A3562E" />
+        </g>
+        <text x="0" y="-13" textAnchor="middle" fontSize="7.5" className="svg-mono" fill="#A3562E">N</text>
+      </g>
+    </svg>
+  );
+}
+
 /* ============================================================
    Summary tab — one printable page: what to build, what to buy,
    what to plant when. Reuses the exact same math as Build/Seeds/Season
    so nothing here can drift out of sync with those tabs.
    ============================================================ */
 
-function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, plantings, year, frost, lastFrost, firstFrost }) {
+function SummaryTab({ beds, yard, features, build, seeds, gardenTally, schedules, plantings, year, frost, lastFrost, firstFrost }) {
   const today = new Date();
   const board = BOARDS[build.board];
   const mat = MATERIALS[build.material];
@@ -4418,6 +4533,11 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
             <div><span>Soil needed</span><p>{soilCuFt.toFixed(0)} cu ft ({(soilCuFt / 27).toFixed(1)} cu yd)</p></div>
             <div><span>Compost / peat / vermiculite</span><p>{(soilCuFt / 3).toFixed(0)} cu ft each</p></div>
           </div>
+        </section>
+
+        <section className="orto-printsection orto-printyard">
+          <h2>Yard layout</h2>
+          <YardOverview yard={yard} beds={beds} features={features} plantings={plantings} />
         </section>
 
         <section className="orto-printsection">
