@@ -3676,7 +3676,7 @@ function BedBlueprint({ x, build }) {
   return (
     <div className="orto-blueprint">
       <div className="orto-bp-actions">
-        <button type="button" className="orto-linkbtn" onClick={printIt}>Print blueprint</button>
+        <button type="button" className="orto-linkbtn no-print" onClick={printIt}>Print blueprint</button>
       </div>
       <div className="orto-bp-views">
         <div>
@@ -4338,7 +4338,13 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
           <h2>Project</h2>
           <div className="orto-printgrid">
             <div><span>Yard</span><p>{yard.w} ft × {yard.d} ft</p></div>
-            <div><span>Beds</span><p>{beds.length}, {totalSqFt} sq ft total</p></div>
+            <div>
+              <span>Beds</span>
+              <p>{beds.length}, {totalSqFt} sq ft total</p>
+              {beds.length > 0 && (
+                <p className="orto-fine">{beds.map((b) => `${b.name} ${bedAreaSqFt(b)}`).join(" · ")}</p>
+              )}
+            </div>
             <div><span>Soil needed</span><p>{soilCuFt.toFixed(0)} cu ft ({(soilCuFt / 27).toFixed(1)} cu yd)</p></div>
             <div><span>Compost / peat / vermiculite</span><p>{(soilCuFt / 3).toFixed(0)} cu ft each</p></div>
           </div>
@@ -4358,6 +4364,18 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
             <p className="orto-fine">No beds to build yet — add some in the Yard tab.</p>
           )}
         </section>
+
+        {builds.length > 0 && (
+          <section className="orto-printsection orto-printblueprints">
+            <h2>Bed blueprints</h2>
+            {builds.map((x) => (
+              <div key={x.bed.id} className="orto-printbp">
+                <h3 className="orto-h3">{x.bed.name} — {x.bed.w} × {x.bed.l} ft, {inchesToFtIn(x.wallIn)} tall</h3>
+                <BedBlueprint x={x} build={build} />
+              </div>
+            ))}
+          </section>
+        )}
 
         <section className="orto-printsection">
           <h2>Seeds to order</h2>
@@ -5237,6 +5255,11 @@ function Styles() {
 .orto-printtable th{text-align:left; font-size:10px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-soft); padding:4px 8px 4px 0; border-bottom:1px solid var(--ink);}
 .orto-printtable td{font-size:12.5px; padding:4px 8px 4px 0; border-bottom:1px solid var(--rule-soft);}
 .orto-printcalendar{break-inside:auto;}
+.orto-printblueprints{break-inside:auto;}
+.orto-printbp{break-inside:avoid; margin-bottom:16px;}
+.orto-printbp:last-child{margin-bottom:0;}
+.orto-printbp h3{font-size:12.5px; margin:0 0 6px;}
+.orto-printbp .orto-blueprint{margin-top:0; border-top:none; padding-top:0;}
 .orto-printfoot{text-align:center; font-size:10px; color:var(--ink-soft); margin-top:20px; border-top:1px solid var(--rule-soft); padding-top:8px;}
 
 @media print {
