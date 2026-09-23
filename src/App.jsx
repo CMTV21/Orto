@@ -722,6 +722,11 @@ const BOARDS = {
   "2x12": { label: "2×12", h: 11.25, t: 1.5, priceMult: 2.1 },
 };
 
+const POSTS = {
+  "4x4": { label: "4×4", actual: 3.5 },
+  "6x6": { label: "6×6", actual: 5.5 },
+};
+
 const MATERIALS = {
   cedar: { label: "Cedar", life: "15–20 years", ppf: 4.5, note: "Rot resistant untreated. The usual choice for food beds." },
   hemlock: { label: "Hemlock", life: "7–10 years", ppf: 2.25, note: "Rough-sawn from a local mill is often the best value." },
@@ -1058,7 +1063,7 @@ function makeBlankState() {
     seeds: [],
     customCrops: [],
     taskDone: {},
-    build: { board: "2x6", material: "cedar", posts: true, fabric: true, topPlate: false, ppf: MATERIALS.cedar.ppf },
+    build: { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, ppf: MATERIALS.cedar.ppf },
     frost: {},
     location: null,
   };
@@ -1072,7 +1077,7 @@ function migrate(s) {
   next.seeds = s.seeds ?? [];
   next.plantings = s.plantings ?? [];
   next.measures = s.measures ?? [];
-  next.build = { board: "2x6", material: "cedar", posts: true, fabric: true, topPlate: false, ppf: MATERIALS.cedar.ppf, ...(s.build || {}) };
+  next.build = { board: "2x6", material: "cedar", post: "4x4", posts: true, fabric: true, topPlate: false, ppf: MATERIALS.cedar.ppf, ...(s.build || {}) };
   next.customCrops = s.customCrops ?? [];
   next.taskDone = s.taskDone ?? {};
   next.location = s.location ?? null;
@@ -3348,6 +3353,11 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
               {Object.entries(MATERIALS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </label>
+          <label>Post size
+            <select className="orto-input" value={build.post ?? "4x4"} onChange={(e) => setBuild({ post: e.target.value })}>
+              {Object.entries(POSTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </label>
           <label>Your price per linear ft
             <input className="orto-input mono" type="number" min="0" step="0.05" value={build.ppf}
               onChange={(e) => setBuild({ ppf: Number(e.target.value) || 0 })} />
@@ -3442,7 +3452,7 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
                             <td className="mono">{x.corners}</td>
                             <td>corner posts</td>
                             <td className="mono">{inchesToFtIn(x.postLenIn)}</td>
-                            <td className="orto-fine">4×4, wall height plus 10″ driven in</td>
+                            <td className="orto-fine">{POSTS[build.post ?? "4x4"].label}, wall height plus 10″ driven in</td>
                           </tr>
                         )}
                       </tbody>
@@ -3538,7 +3548,7 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
           <div className="orto-buyrow">
             <span className="mono orto-buyn">{posts.stock8}</span>
             <span>
-              <strong>4×4 × 8 ft</strong>
+              <strong>{POSTS[build.post ?? "4x4"].label} × 8 ft</strong>
               <i>{posts.total} posts at {inchesToFtIn(posts.maxLen)}, {posts.perStock} from each board</i>
             </span>
           </div>
@@ -3614,6 +3624,7 @@ function BuildTab({ beds, build, setBuild, updateBed }) {
    to actually build from without needing the cut-list table open too. */
 function BedBlueprint({ x, build }) {
   const board = BOARDS[build.board];
+  const post = POSTS[build.post ?? "4x4"];
   const { bed, courses, wallIn, postLenIn, topPlate, capOverhangIn } = x;
   const planRef = useRef(null);
   const elevRef = useRef(null);
@@ -3705,7 +3716,7 @@ function BedBlueprint({ x, build }) {
           <svg ref={elevRef} viewBox={`0 0 ${elW} ${elH}`} width="150" role="img" aria-label={`${bed.name} corner detail`}>
             <line x1="0" y1={groundY} x2={elW} y2={groundY} stroke="#8a7a5c" strokeWidth="2" />
             {postLenIn > 0 && (
-              <rect x="24" y={topY} width="8" height={wallHpx + postBelowPx} fill="#B89B6A" stroke="#2b2b22" strokeWidth="1" />
+              <rect x={28 - post.actual * 1.4} y={topY} width={post.actual * 2.8} height={wallHpx + postBelowPx} fill="#B89B6A" stroke="#2b2b22" strokeWidth="1" />
             )}
             {Array.from({ length: courses }).map((_, i) => (
               <rect key={i} x="32" y={topY + i * (wallHpx / courses)} width="70" height={wallHpx / courses - 1}
@@ -3724,7 +3735,7 @@ function BedBlueprint({ x, build }) {
             )}
           </svg>
           <p className="orto-fine">
-            Corner detail — {courses} course{courses === 1 ? "" : "s"} of {board.label}{topPlate ? " + top plate" : ""}, not to the plan's scale
+            Corner detail — {courses} course{courses === 1 ? "" : "s"} of {board.label}{topPlate ? " + top plate" : ""}{postLenIn > 0 ? ` on ${post.label} posts` : ""}, not to the plan's scale
           </p>
         </div>
       </div>
@@ -4340,7 +4351,7 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
             <div><span>Yard</span><p>{yard.w} ft × {yard.d} ft</p></div>
             <div>
               <span>Beds</span>
-              <p>{beds.length}, {totalSqFt} sq ft total</p>
+              <p>{beds.length} bed{beds.length === 1 ? "" : "s"} · {totalSqFt} sq ft total</p>
               {beds.length > 0 && (
                 <p className="orto-fine">{beds.map((b) => `${b.name} ${bedAreaSqFt(b)}`).join(" · ")}</p>
               )}
@@ -4356,7 +4367,7 @@ function SummaryTab({ beds, yard, build, seeds, gardenTally, schedules, planting
             <div className="orto-printgrid">
               <div><span>Lumber</span><p>{pack.bars.length} × {pack.stockFt} ft {board.label}, {mat.label.toLowerCase()}</p></div>
               <div><span>Board feet</span><p>{pack.totalFt} lin ft{lumberCost > 0 ? ` · ~$${lumberCost.toFixed(0)}` : ""}</p></div>
-              {totalPosts > 0 && <div><span>Corner posts</span><p>{totalPosts} × 2×4</p></div>}
+              {totalPosts > 0 && <div><span>Corner posts</span><p>{totalPosts} × {POSTS[build.post ?? "4x4"].label}</p></div>}
               {build.fabric && <div><span>Landscape fabric</span><p>{fabricSqFt.toFixed(0)} sq ft</p></div>}
               <div><span>Screws</span><p>~{screws}</p></div>
             </div>
